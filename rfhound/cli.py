@@ -1,0 +1,978 @@
+"""RFHound command-line interface.
+
+Run ``rfhound`` with no arguments for the guided interactive menu, or use the
+subcommands below for scripting. Everything is receive-first; transmit paths are
+gated behind ``rfhound tx enable`` + an explicit ``--authorized`` flag.
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+from . import __version__, bandplan, console, device, proc, safety
+from .config import Config, TxAllowRange, load_config, save_config, config_path
+from .exceptions import RFHoundError
+from .modules import capture as capture_mod
+from .modules import decode as decode_mod
+from .modules import defense as defense_mod
+from .modules import intel as intel_mod
+from .modules import gnuradio as gr_mod
+from .modules import response as response_mod
+from .modules import cellular as cellular_mod
+from .modules import toolbox as toolbox_mod
+from . import plugins
+from .modules import recon as recon_mod
+from .modules import replay as replay_mod
+from .modules import report as report_mod
+from .modules import sweep as sweep_mod
+
+
+# --------------------------------------------------------------------------- #
+# Subcommand handlers
+# --------------------------------------------------------------------------- #
+def cmd_doctor(args: argparse.Namespace, cfg: Config) -> int:
+    console.rule("Environment check")
+    # External tools.
+    rows = []
+    for tool, installed, path in proc.tool_status():
+        rows.append([
+            tool.name,
+            "✓" if installed else "✗",
+            tool.purpose,
+            path or tool.install_hint,
+        ])
+    console.table("External tools", ["Tool", "OK", "Purpose", "Path / install hint"], rows)
+
+    # Device.
+    console.rule("HackRF device")
+    try:
+        info = device.get_info()
+        console.success(f"HackRF detected (serial {info.serial}, fw {info.firmware})")
+    except RFHoundError as exc:
+        console.warn(str(exc).splitlines()[0])
+        console.print_("  Tip: use --simulate on sweep/recon to try RFHound without hardware.")
+
+    # rich?
+    console.rule("RFHound")
+    console.print_(f"Version: {__version__}")
+    console.print_(f"Rich UI: {'yes' if console.have_rich() else 'no (plain text fallback)'}")
+    console.print_(f"Config:  {config_path()} ({'exists' if config_path().exists() else 'defaults'})")
+    console.print_(f"Output:  {cfg.output_dir}")
+    console.print_(f"Transmit: {'ENABLED' if cfg.tx_enabled else 'disabled'}")
+    return 0
+
+
+def cmd_bands(args: argparse.Namespace, cfg: Config) -> int:
+    bands = bandplan.BANDS
+    if args.category:
+        bands = [b for b in bands if b.category == args.category]
+    if args.tag:
+        bands = [b for b in bands if args.tag in b.tags]
+    if args.search:
+        q = args.search.lower()
+        bands = [b for b in bands if q in b.name.lower() or q in b.description.lower()]
+    if not bands:
+        console.warn("No bands match that filter.")
+        return 1
+    rows = [
+        [
+            f"{b.low_hz/1e6:.3f}-{b.high_hz/1e6:.3f}",
+            b.name,
+            b.category,
+            b.region,
+            b.decoder or "-",
+        ]
+        for b in bands
+    ]
+    console.table(
+        "Band plan (MHz)", ["Range", "Name", "Category", "Region", "Decoder"], rows
+    )
+    if args.verbose:
+        for b in bands:
+            console.rule(b.name)
+            console.print_(b.description)
+    return 0
+
+
+def cmd_at(args: argparse.Namespace, cfg: Config) -> int:
+    tb = toolbox_mod.at_frequency(args.freq)
+    if not tb:
+        console.warn(f"{args.freq} MHz is not in RFHound's band plan "
+                     f"(HackRF covers 1-6000 MHz).")
+        return 1
+    if args.json:
+        import json
+        console.print_(json.dumps({
+            "freq_mhz": args.freq, "band": tb.band.name, "category": tb.band.category,
+            "range_mhz": [tb.band.low_hz / 1e6, tb.band.high_hz / 1e6],
+            "decoders": tb.decoders, "detectors": tb.detectors,
+            "gnuradio": tb.gnuradio, "commands": tb.commands}, indent=2))
+        return 0
+    b = tb.band
+    console.panel(
+        f"{b.name}   ({b.low_hz/1e6:.3f}–{b.high_hz/1e6:.3f} MHz · {b.category} · {b.region})\n\n"
+        f"{b.description}",
+        title=f"You are at {args.freq} MHz", style="cyan")
+    console.rule("Decoders for this band")
+    if tb.decoders:
+        rows = []
+        for rid in tb.decoders:
+            r = decode_mod.get_recipe(rid)
+            ready, _ = decode_mod.check_recipe(r) if r else (False, None)
+            rows.append([rid, r.name if r else "—", "✓" if ready else "✗ (install)"])
+        console.table("", ["ID", "Name", "Tool ready"], rows)
+    else:
+        console.print_("  (no protocol decoder — try a GNU Radio preset below)")
+    console.rule("Threat detectors that apply here")
+    for d in tb.detectors:
+        console.print_(f"  • rfhound defense {d}")
+    console.rule("GNU Radio presets")
+    console.print_("  " + ", ".join(tb.gnuradio))
+    console.rule("Try these")
+    for c in tb.commands:
+        console.print_(f"  $ {c}")
+    return 0
+
+
+def cmd_tune(args: argparse.Namespace, cfg: Config) -> int:
+    matches = toolbox_mod.tune_search(args.query)
+    if not matches:
+        console.warn(f"No band matches '{args.query}'. Try: adsb, tpms, pager, "
+                     f"drone, cellular, ais, weather…")
+        return 1
+    if args.json:
+        import json
+        console.print_(json.dumps([m.__dict__ for m in matches], indent=2))
+        return 0
+    rows = [[f"{m.tune_mhz:.4f}", m.name, f"{m.low_mhz:.3f}–{m.high_mhz:.3f}",
+             m.category, m.decoder or "—"] for m in matches]
+    console.table(f"Tune to — matches for '{args.query}'",
+                  ["Tune (MHz)", "Band", "Range", "Category", "Decoder"], rows)
+    top = matches[0]
+    console.print_(f"\n→ Best match: tune to [bold]{top.tune_mhz:.4f} MHz[/bold] for {top.name}"
+                   if console.have_rich() else
+                   f"\n-> Best match: tune to {top.tune_mhz:.4f} MHz for {top.name}")
+    console.print_(f"  $ rfhound at {top.tune_mhz:.3f}      # see the full toolbox here")
+    return 0
+
+
+def cmd_sweep(args: argparse.Namespace, cfg: Config) -> int:
+    if getattr(args, "watch", False):
+        return _sweep_watch(args, cfg)
+    with console.status(f"Sweeping {args.start}-{args.stop} MHz…"):
+        result = sweep_mod.sweep(
+            cfg,
+            args.start,
+            args.stop,
+            bin_khz=args.bin,
+            snr_db=args.snr,
+            sweeps=args.sweeps,
+            simulate=args.simulate,
+        )
+    sweep_mod.render_spectrum(result)
+    if result.peaks:
+        rows = [
+            [
+                f"{p.freq_mhz:.4f}",
+                f"{p.power_db}",
+                p.band.name if p.band else "unknown",
+                p.band.decoder if p.band and p.band.decoder else "-",
+            ]
+            for p in result.peaks[: args.top]
+        ]
+        console.table(
+            f"Top {min(args.top, len(result.peaks))} peaks",
+            ["Freq (MHz)", "Power (dB)", "Band", "Decoder"],
+            rows,
+        )
+    else:
+        console.warn("No peaks above the noise floor. Try lowering --snr or adding gain.")
+    return 0
+
+
+def _sweep_watch(args: argparse.Namespace, cfg: Config) -> int:
+    """Continuously sweep and redraw a live terminal spectrogram (rich.Live)."""
+    import time
+    console.info(f"Live spectrum {args.start}-{args.stop} MHz — Ctrl-C to stop.")
+    try:
+        for _ in range(args.count if args.count else 10_000_000):
+            result = sweep_mod.sweep(cfg, args.start, args.stop, bin_khz=args.bin,
+                                     snr_db=args.snr, simulate=args.simulate)
+            sweep_mod.render_spectrum(result)
+            if result.peaks:
+                top = result.peaks[0]
+                console.print_(f"  peak {top.freq_mhz:.3f} MHz @ {top.power_db} dB "
+                               f"({top.band.name if top.band else 'unknown'})")
+            time.sleep(max(0.2, args.interval))
+    except KeyboardInterrupt:
+        console.warn("stopped.")
+    return 0
+
+
+def cmd_recon(args: argparse.Namespace, cfg: Config) -> int:
+    targets = None
+    if args.category:
+        targets = bandplan.bands_by_category(args.category)
+        if not targets:
+            console.error(f"No bands in category '{args.category}'.")
+            return 1
+    with console.status("Surveying bands…"):
+        report = recon_mod.run_recon(
+            cfg, targets=targets, snr_db=args.snr, bin_khz=args.bin,
+            simulate=args.simulate, progress=False,
+        )
+    recon_mod.summarize(report)
+
+    # Suggest next steps.
+    suggestions = [
+        f.band for f in report.active_findings if f.band.decoder
+    ]
+    if suggestions:
+        console.rule("Suggested next steps")
+        for b in suggestions[:8]:
+            console.print_(
+                f"  rfhound decode run {b.decoder} --freq {b.tune_hz/1e6:.3f}   "
+                f"# {b.name}"
+            )
+
+    if args.report:
+        out = Path(args.report)
+        fmt = "html" if out.suffix.lower() in (".html", ".htm") else "md"
+        report_mod.write_report(report, out, fmt=fmt)
+        console.success(f"Report written to {out}")
+    return 0
+
+
+def cmd_capture(args: argparse.Namespace, cfg: Config) -> int:
+    cap = capture_mod.capture_iq(
+        cfg,
+        args.freq,
+        args.seconds,
+        name=args.name,
+        sample_rate=args.rate,
+        note=args.note or "",
+        simulate=args.simulate,
+    )
+    console.success(f"Captured {cap.seconds}s @ {cap.freq_hz/1e6:.3f} MHz")
+    console.print_(f"  data: {cap.data_path}")
+    console.print_(f"  meta: {cap.meta_path}")
+    console.print_("  Open in URH / inspectrum / GNU Radio for analysis.")
+    return 0
+
+
+def cmd_decode(args: argparse.Namespace, cfg: Config) -> int:
+    if args.decode_cmd == "list":
+        rows = []
+        for r in decode_mod.list_recipes():
+            available, path = decode_mod.check_recipe(r)
+            rows.append([
+                r.id,
+                r.name,
+                r.category,
+                f"{r.default_freq_hz/1e6:.3f}",
+                "✓" if available else "✗ (missing)",
+            ])
+        console.table(
+            "Decoder recipes", ["ID", "Name", "Category", "Def. MHz", "Tool ready"], rows
+        )
+        console.print_("\nRun one with:  rfhound decode run <id> [--freq MHz] [--seconds N]")
+        return 0
+
+    # run
+    recipe = decode_mod.get_recipe(args.recipe)
+    if not recipe:
+        console.error(f"Unknown recipe '{args.recipe}'. Try: rfhound decode list")
+        return 1
+    freq_hz = int(args.freq * 1e6) if args.freq else recipe.default_freq_hz
+    console.info(f"{recipe.name} @ {freq_hz/1e6:.3f} MHz for {args.seconds}s")
+    if recipe.note:
+        console.print_(f"  note: {recipe.note}")
+    if args.dry_run:
+        cmd = decode_mod.run_decoder(recipe, cfg, freq_hz=freq_hz, seconds=args.seconds, dry_run=True)
+        console.print_(f"  would run: {cmd[0]}")
+        return 0
+    try:
+        lines = decode_mod.run_decoder(
+            recipe, cfg, freq_hz=freq_hz, seconds=args.seconds,
+            on_line=console.print_,
+        )
+    except RFHoundError as exc:
+        console.error(str(exc))
+        return 1
+    console.success(f"Decoder finished ({len(lines)} lines).")
+    return 0
+
+
+def cmd_replay(args: argparse.Namespace, cfg: Config) -> int:
+    data_path = Path(args.file)
+    try:
+        plan = replay_mod.replay(
+            cfg,
+            data_path,
+            authorized=args.authorized,
+            freq_hz=int(args.freq * 1e6) if args.freq else None,
+            tx_gain=args.gain,
+            dry_run=args.dry_run,
+        )
+    except RFHoundError as exc:
+        console.error(str(exc))
+        return 2
+    if args.dry_run:
+        console.print_(f"  would run: {proc.format_command(plan.command)}")
+    else:
+        console.success(f"Replayed {data_path.name} @ {plan.freq_hz/1e6:.3f} MHz")
+    return 0
+
+
+def cmd_tx(args: argparse.Namespace, cfg: Config) -> int:
+    if args.tx_cmd == "status":
+        console.print_(f"Transmit: {'ENABLED' if cfg.tx_enabled else 'disabled'}")
+        console.print_(f"Consent recorded: {cfg.tx_consent_at or '(none)'}")
+        console.print_(f"Jurisdiction: {cfg.jurisdiction or '(unset)'}")
+        if cfg.tx_allow_ranges:
+            for r in cfg.tx_allow_ranges:
+                console.print_(f"  allow: {r.low_hz/1e6:.3f}-{r.high_hz/1e6:.3f} MHz  {r.note}")
+        else:
+            console.print_("  allow: (no ranges declared)")
+        return 0
+
+    if args.tx_cmd == "disable":
+        safety.disable_tx(cfg)
+        console.success("Transmit disabled.")
+        return 0
+
+    # enable
+    console.panel(safety.CONSENT_TEXT, title="Transmit legal terms", style="yellow")
+    if not args.yes and not console.confirm("Do you accept these terms?", default=False):
+        console.warn("Transmit not enabled.")
+        return 1
+    ranges = []
+    for spec in args.allow or []:
+        try:
+            lo, hi = spec.split("-")
+            ranges.append(TxAllowRange(int(float(lo) * 1e6), int(float(hi) * 1e6), "cli"))
+        except ValueError:
+            console.error(f"Bad --allow range '{spec}'. Use MHZ-MHZ, e.g. 433.0-434.8")
+            return 1
+    if not ranges:
+        console.error("Provide at least one --allow MHZ-MHZ range you are authorized to use.")
+        return 1
+    try:
+        safety.enable_tx(cfg, ranges, jurisdiction=args.jurisdiction or "")
+    except RFHoundError as exc:
+        console.error(str(exc))
+        return 1
+    console.success("Transmit enabled with the declared allow-list.")
+    console.print_("Replay still requires an explicit --authorized flag per invocation.")
+    return 0
+
+
+def _load_json_list(path: str | None) -> list:
+    if not path:
+        raise RFHoundError("Provide --file <messages.json> (a JSON array) or use --simulate.")
+    import json
+    data = json.loads(Path(path).read_text())
+    if not isinstance(data, list):
+        raise RFHoundError(f"{path} must contain a JSON array of message objects.")
+    return data
+
+
+def cmd_mods(args: argparse.Namespace, cfg: Config) -> int:
+    if args.mods_cmd == "sample":
+        path = plugins.write_sample_mod()
+        console.success(f"Wrote a sample mod to {path}")
+        console.print_("Edit it, then run 'rfhound mods list' to load it.")
+        return 0
+    # list (also the default): load and report
+    directory = Path(args.dir) if args.dir else plugins.mods_dir()
+    loaded = plugins.load_mods(directory)
+    console.print_(f"Mods directory: {directory}")
+    if not loaded:
+        console.warn("No mods found. Create one with 'rfhound mods sample'.")
+        return 0
+    rows = []
+    for m in loaded:
+        status = "ok" if not m.error else f"ERROR: {m.error}"
+        rows.append([m.name, m.version,
+                     f"{len(m.bands)}b/{len(m.recipes)}r/{len(m.detectors)}d", status])
+    console.table("Loaded mods", ["Name", "Version", "Adds", "Status"], rows)
+    return 0
+
+
+def cmd_defense(args: argparse.Namespace, cfg: Config) -> int:
+    if args.defense_cmd == "monitor":
+        report = defense_mod.monitor_interference(
+            cfg, args.start, args.stop,
+            iterations=args.samples, interval_s=args.interval,
+            threshold_db=args.threshold, simulate=args.simulate,
+        )
+        defense_mod.print_interference(report)
+        return 1 if report.jammed else 0
+
+    if args.defense_cmd == "rolling-assess":
+        if args.simulate:
+            payloads = defense_mod.simulate_payloads(args.kind)
+        elif args.file:
+            payloads = Path(args.file).read_text().splitlines()
+        else:
+            console.error("Provide --file <payloads.txt> (one code per line) or --simulate.")
+            return 1
+        assessment = defense_mod.assess_rolling_code(payloads)
+        defense_mod.print_rolling(assessment)
+        return 0
+
+    if args.defense_cmd == "replay-check":
+        # Observations file: 'timestamp payload' per line, or --simulate.
+        if args.simulate:
+            t0 = 1000.0
+            obs = [  # same fixed code re-sent 3x in <1s => replay signature
+                defense_mod.Observation(t0, "10101100"),
+                defense_mod.Observation(t0 + 0.4, "10101100"),
+                defense_mod.Observation(t0 + 0.7, "10101100"),
+            ]
+        elif args.file:
+            obs = []
+            for line in Path(args.file).read_text().splitlines():
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                parts = line.split()
+                if len(parts) >= 2:
+                    obs.append(defense_mod.Observation(float(parts[0]), parts[1]))
+        else:
+            console.error("Provide --file <observations.txt> ('ts payload' per line) or --simulate.")
+            return 1
+        findings = defense_mod.detect_replays(obs, rolling_expected=not args.fixed)
+        if not findings:
+            console.success("No replay signatures detected.")
+            return 0
+        console.error(f"Possible replay attack(s) detected: {len(findings)}")
+        for f in findings:
+            console.print_(f"  • payload {f.payload}: seen {f.count}x, "
+                           f"min gap {f.min_gap_s}s — {f.reason}")
+        return 1
+
+    if args.defense_cmd == "baseline":
+        if args.baseline_cmd == "save":
+            path = intel_mod.save_baseline(
+                cfg, args.start, args.stop, Path(args.out), simulate=args.simulate
+            )
+            console.success(f"Baseline saved to {path}")
+            return 0
+        # diff
+        findings = intel_mod.diff_baseline(
+            cfg, Path(args.file), new_threshold_db=args.threshold, simulate=args.simulate
+        )
+        if not findings:
+            console.success("No new or elevated emitters vs baseline — area clean.")
+            return 0
+        console.error(f"TSCM: {len(findings)} new/elevated emitter(s) vs baseline:")
+        rows = [
+            [f"{f.freq_mhz:.4f}", f"{f.power_db}", f.kind,
+             f"+{f.delta_db}" if f.baseline_db is not None else "new",
+             f.band or "unknown"]
+            for f in findings
+        ]
+        console.table("Rogue emitters", ["Freq (MHz)", "Power dB", "Kind", "Δ dB", "Band"], rows)
+        return 1
+
+    if args.defense_cmd == "spoof-check":
+        if args.protocol == "adsb":
+            msgs = intel_mod.simulate_adsb_messages() if args.simulate else _load_json_list(args.file)
+            findings = intel_mod.detect_adsb_spoofing(msgs)
+        else:
+            msgs = intel_mod.simulate_ais_messages() if args.simulate else _load_json_list(args.file)
+            findings = intel_mod.detect_ais_spoofing(msgs)
+        if not findings:
+            console.success(f"No {args.protocol.upper()} spoofing indicators found.")
+            return 0
+        console.error(f"{args.protocol.upper()} spoofing indicators: {len(findings)}")
+        for f in findings:
+            console.print_(f"  • [{f.severity}] {f.entity_id} — {f.kind}: {f.detail}")
+        return 1
+
+    if args.defense_cmd == "drone-scan":
+        hits = intel_mod.drone_scan(cfg, simulate=args.simulate)
+        if not hits:
+            console.success("No drone-band activity detected.")
+            return 0
+        console.error(f"Counter-UAS: activity in {len(hits)} drone-band bin(s):")
+        rows = [[h.band, f"{h.freq_mhz:.3f}", f"{h.power_db}", h.confidence] for h in hits]
+        console.table("Drone-band detections", ["Band", "Freq (MHz)", "Power dB", "Confidence"], rows)
+        return 1
+
+    if args.defense_cmd == "imsi-catcher":
+        if args.simulate:
+            obs = cellular_mod.simulate_observations()
+        elif args.file:
+            import json
+            raw = json.loads(Path(args.file).read_text())
+            obs = [cellular_mod.CellObservation(**o) for o in raw]
+        else:
+            console.error("Provide --file <cells.json> or --simulate.")
+            return 1
+        alerts = cellular_mod.detect_rogue_bts(obs)
+        sc = cellular_mod.score(alerts)
+        console.rule("Rogue base station / IMSI-catcher detection")
+        if not alerts:
+            console.success(f"No rogue-BTS indicators (score {sc}/100).")
+            return 0
+        console.error(f"Rogue-BTS indicators: {len(alerts)}  ·  likelihood {sc}/100")
+        for a in alerts:
+            console.print_(f"  • [{a.severity}] CID={a.cid} {a.indicator}: {a.detail}")
+        return 1
+
+    if args.defense_cmd == "hop-detect":
+        if args.simulate:
+            slices = intel_mod.simulate_hopping_slices(hopping=True)
+        else:
+            console.error("Live hop-detect needs sweep peak data; use --simulate for a demo.")
+            return 1
+        report = intel_mod.detect_frequency_hopping(slices)
+        console.rule("Frequency-hopping detection")
+        console.print_(report.detail)
+        if report.hopping_suspected:
+            console.error("Frequency-hopping emitter SUSPECTED (frequency-agile transmitter).")
+            return 1
+        console.success("No hopping pattern detected.")
+        return 0
+
+    if args.defense_cmd == "respond":
+        pb = response_mod.get_playbook(args.threat)
+        if not pb:
+            console.error(f"Unknown threat '{args.threat}'. "
+                          f"Options: {', '.join(response_mod.list_threats())}")
+            return 1
+        console.rule(f"Counter-threat playbook: {pb.threat}")
+        console.print_(pb.summary)
+        for title, items in [("Immediate actions", pb.immediate),
+                             ("Preserve evidence", pb.evidence),
+                             ("Mitigations / hardening", pb.mitigations),
+                             ("Escalation", pb.escalation)]:
+            console.rule(title)
+            for it in items:
+                console.print_(f"  • {it}")
+        return 0
+
+    if args.defense_cmd == "resilience":
+        payloads = None
+        if args.payloads:
+            payloads = Path(args.payloads).read_text().splitlines()
+        result = defense_mod.run_resilience_test(
+            cfg,
+            device=args.device or "device-under-test",
+            payloads=payloads,
+            replayed=args.replayed,
+            device_actuated=(None if args.actuated is None else args.actuated),
+            simulate=args.simulate,
+        )
+        defense_mod.print_resilience(result)
+        return 0
+
+    console.error("Unknown defense subcommand.")
+    return 1
+
+
+def cmd_web(args: argparse.Namespace, cfg: Config) -> int:
+    from .web import server as web_server
+    force_sim = args.simulate or cfg.simulate_mode or not device.is_present()
+    if force_sim and not args.simulate:
+        console.warn("No HackRF detected — dashboard will run in SIMULATE mode.")
+    url = f"http://{args.host}:{args.port}"
+    if args.open:
+        import webbrowser
+        webbrowser.open(url)
+    web_server.serve(cfg, host=args.host, port=args.port, force_simulate=force_sim)
+    return 0
+
+
+def cmd_gnuradio(args: argparse.Namespace, cfg: Config) -> int:
+    if args.gr_cmd == "status":
+        st = gr_mod.gnuradio_status()
+        (console.success if st.installed else console.warn)(st.detail)
+        return 0
+    if args.gr_cmd == "list":
+        rows = [[p.id, p.name, p.category, p.description] for p in gr_mod.list_presets()]
+        console.table("GNU Radio flowgraph presets (receive/analysis only)",
+                      ["ID", "Name", "Category", "Description"], rows)
+        console.print_("\nGenerate one:  rfhound gnuradio gen <id> --freq MHz [--out file.py]")
+        return 0
+    # gen
+    try:
+        dest = gr_mod.generate_flowgraph(
+            args.preset, cfg, freq_mhz=args.freq, sample_rate=args.rate,
+            out_file=args.data_out,
+            dest_path=Path(args.out) if args.out else None,
+        )
+    except ValueError as exc:
+        console.error(str(exc))
+        return 1
+    console.success(f"Wrote GNU Radio flowgraph to {dest}")
+    if not args.quiet:
+        console.syntax(dest.read_text(), "python", title=f"{dest.name} (preview)")
+    st = gr_mod.gnuradio_status()
+    if not st.installed:
+        console.warn("GNU Radio isn't installed here; the script will run where it is "
+                     "(apt install gnuradio gr-osmosdr).")
+    else:
+        console.print_(f"Run it:  python3 {dest}")
+    return 0
+
+
+def cmd_dev(args: argparse.Namespace, cfg: Config) -> int:
+    console.set_debug(True)
+    console.rule("RFHound developer diagnostics")
+    console.print_(f"version: {__version__}")
+    console.print_(f"rich: {console.have_rich()}  ·  config: {config_path()}")
+    console.print_(f"bands: {len(bandplan.BANDS)}  ·  decoder recipes: "
+                   f"{len(decode_mod.list_recipes())}  ·  "
+                   f"threats: {len(response_mod.list_threats())}")
+    from .llm import actions as llm_actions
+    console.print_(f"llm actions (safe, RX-only): {len(llm_actions.ACTIONS)}")
+    console.print_(f"gnuradio presets: {len(gr_mod.list_presets())}")
+    console.rule("External tools")
+    for tool, ok, path in proc.tool_status():
+        console.print_(f"  [{'✓' if ok else '✗'}] {tool.name}: {path or 'not found'}")
+    console.debug("dev mode active — full tracebacks enabled")
+    return 0
+
+
+def cmd_ask(args: argparse.Namespace, cfg: Config) -> int:
+    from .llm import Copilot
+    copilot = Copilot(cfg, provider=args.provider)
+    console.print_(f"[copilot:{copilot.provider}]")
+    try:
+        result = copilot.ask(args.query)
+    except Exception as exc:
+        console.error(f"Copilot error: {exc}")
+        if not args.provider or args.provider == "offline":
+            raise
+        console.print_("Tip: check ANTHROPIC_API_KEY / --provider / llm_base_url, "
+                       "or use --provider offline.")
+        return 2
+    for a in result.actions_run:
+        console.info(f"ran {a['action']}({a['params']})")
+    console.print_(result.text)
+    return 0
+
+
+def cmd_hub(args: argparse.Namespace, cfg: Config) -> int:
+    from .net import serve_hub
+    serve_hub(host=args.host, port=args.port, token=args.token or cfg.hub_token)
+    return 0
+
+
+def cmd_node(args: argparse.Namespace, cfg: Config) -> int:
+    from .net import node_register, node_report
+    hub = args.hub or cfg.hub_url
+    node_id = args.id or cfg.node_id or "node-1"
+    token = args.token or cfg.hub_token
+    if not hub:
+        console.error("No hub URL. Pass --hub http://host:port (or set hub_url in config).")
+        return 1
+    try:
+        node_register(hub, node_id, name=args.name or node_id, location=args.location or "",
+                      token=token)
+        console.success(f"Registered node '{node_id}' with hub {hub}")
+        sim = args.simulate or cfg.simulate_mode or not device.is_present()
+        if args.scan == "recon":
+            rep = recon_mod.run_recon(cfg, simulate=sim, progress=False)
+            data = {"active": len(rep.active_findings), "total": len(rep.findings)}
+        elif args.scan == "drone":
+            hits = intel_mod.drone_scan(cfg, simulate=sim)
+            data = {"drone_hits": len(hits)}
+        elif args.scan == "imsi":
+            obs = cellular_mod.simulate_observations() if sim else []
+            alerts = cellular_mod.detect_rogue_bts(obs)
+            data = {"rogue_bts_score": cellular_mod.score(alerts), "alerts": len(alerts)}
+        else:
+            data = {"status": "online"}
+        if args.scan or True:
+            node_report(hub, node_id, args.scan or "status", data, token=token)
+            console.success(f"Pushed report ({args.scan or 'status'}): {data}")
+    except Exception as exc:
+        console.error(f"Node link failed: {exc}")
+        return 2
+    return 0
+
+
+def cmd_config(args: argparse.Namespace, cfg: Config) -> int:
+    if args.config_cmd == "path":
+        console.print_(str(config_path()))
+        return 0
+    if args.config_cmd == "init":
+        path = save_config(cfg)
+        console.success(f"Wrote default config to {path}")
+        return 0
+    # show
+    import json
+    console.print_(json.dumps(cfg.to_dict(), indent=2))
+    return 0
+
+
+def cmd_menu(args: argparse.Namespace, cfg: Config) -> int:
+    from .menu import run_menu
+    return run_menu(cfg)
+
+
+# --------------------------------------------------------------------------- #
+# Parser
+# --------------------------------------------------------------------------- #
+def build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(
+        prog="rfhound",
+        description="HackRF reconnaissance & pentesting toolkit (receive-first).",
+    )
+    p.add_argument("--version", action="version", version=f"rfhound {__version__}")
+    p.add_argument("--dev", action="store_true", help="Developer mode: verbose debug + tracebacks")
+    p.add_argument("--simulate", dest="simulate_global", action="store_true",
+                   help="Global simulate mode: run everything against synthetic data")
+    sub = p.add_subparsers(dest="command")
+
+    sub.add_parser("doctor", help="Check tools, HackRF device and config").set_defaults(func=cmd_doctor)
+    sub.add_parser("menu", help="Launch the guided interactive menu").set_defaults(func=cmd_menu)
+
+    pw = sub.add_parser("web", help="Launch the browser dashboard + REST API")
+    pw.add_argument("--host", default="127.0.0.1", help="Bind address (default localhost)")
+    pw.add_argument("--port", type=int, default=8000, help="Port (default 8000)")
+    pw.add_argument("--simulate", action="store_true", help="Force simulate mode")
+    pw.add_argument("--open", action="store_true", help="Open a browser window")
+    pw.set_defaults(func=cmd_web)
+
+    pb = sub.add_parser("bands", help="Browse the frequency knowledge base")
+    pb.add_argument("--category", help="Filter by category (ism, aviation, ...)")
+    pb.add_argument("--tag", help="Filter by tag (tpms, keyfob, adsb, ...)")
+    pb.add_argument("--search", help="Substring search of name/description")
+    pb.add_argument("-v", "--verbose", action="store_true", help="Show descriptions")
+    pb.set_defaults(func=cmd_bands)
+
+    pat = sub.add_parser("at", help="Identify the band at a frequency and list its tools")
+    pat.add_argument("freq", type=float, help="Frequency (MHz)")
+    pat.add_argument("--json", action="store_true", help="Machine-readable output")
+    pat.set_defaults(func=cmd_at)
+
+    ptu = sub.add_parser("tune", help="Find the frequency to tune to for a protocol/name")
+    ptu.add_argument("query", help="Protocol/name, e.g. adsb, tpms, pager, drone")
+    ptu.add_argument("--json", action="store_true", help="Machine-readable output")
+    ptu.set_defaults(func=cmd_tune)
+
+    ps = sub.add_parser("sweep", help="Wideband spectrum sweep")
+    ps.add_argument("start", type=float, help="Start frequency (MHz)")
+    ps.add_argument("stop", type=float, help="Stop frequency (MHz)")
+    ps.add_argument("--bin", type=int, default=100, help="Bin width (kHz)")
+    ps.add_argument("--snr", type=float, default=12.0, help="Peak threshold above floor (dB)")
+    ps.add_argument("--sweeps", type=int, default=1, help="Number of peak-held passes")
+    ps.add_argument("--top", type=int, default=15, help="Show top-N peaks")
+    ps.add_argument("--watch", action="store_true", help="Live, continuously-updating spectrum")
+    ps.add_argument("--interval", type=float, default=1.0, help="Seconds between watch frames")
+    ps.add_argument("--count", type=int, default=0, help="Watch frames to draw (0 = until Ctrl-C)")
+    ps.add_argument("--simulate", action="store_true", help="Synthesise data (no hardware)")
+    ps.set_defaults(func=cmd_sweep)
+
+    pr = sub.add_parser("recon", help="Auto-survey the high-value bands")
+    pr.add_argument("--category", help="Restrict to one band category")
+    pr.add_argument("--snr", type=float, default=12.0, help="Peak threshold (dB)")
+    pr.add_argument("--bin", type=int, default=100, help="Bin width (kHz)")
+    pr.add_argument("--report", help="Write a report to this path (.md or .html)")
+    pr.add_argument("--simulate", action="store_true", help="Synthesise data (no hardware)")
+    pr.set_defaults(func=cmd_recon)
+
+    pc = sub.add_parser("capture", help="Record IQ to disk (with SigMF metadata)")
+    pc.add_argument("freq", type=float, help="Center frequency (MHz)")
+    pc.add_argument("seconds", type=float, help="Duration (s)")
+    pc.add_argument("--name", help="Base filename")
+    pc.add_argument("--rate", type=int, help="Sample rate (Hz)")
+    pc.add_argument("--note", help="Free-text note stored in metadata")
+    pc.add_argument("--simulate", action="store_true", help="Write placeholder (no hardware)")
+    pc.set_defaults(func=cmd_capture)
+
+    pd = sub.add_parser("decode", help="Protocol decoders (rtl_433, ADS-B, pagers, AIS...)")
+    dsub = pd.add_subparsers(dest="decode_cmd", required=True)
+    dsub.add_parser("list", help="List decoder recipes")
+    drun = dsub.add_parser("run", help="Run a decoder recipe")
+    drun.add_argument("recipe", help="Recipe id (see 'decode list')")
+    drun.add_argument("--freq", type=float, help="Override frequency (MHz)")
+    drun.add_argument("--seconds", type=float, default=30, help="Listen duration (s)")
+    drun.add_argument("--dry-run", action="store_true", help="Print the command only")
+    pd.set_defaults(func=cmd_decode)
+
+    prp = sub.add_parser("replay", help="Replay a captured IQ file (GATED, authorized only)")
+    prp.add_argument("file", help="Path to a .sigmf-data / .iq capture")
+    prp.add_argument("--freq", type=float, help="Override frequency (MHz)")
+    prp.add_argument("--gain", type=int, help="TX VGA gain (0-47 dB)")
+    prp.add_argument("--authorized", action="store_true",
+                     help="Assert you are authorized to transmit this signal")
+    prp.add_argument("--dry-run", action="store_true", help="Show command, do not transmit")
+    prp.set_defaults(func=cmd_replay)
+
+    pt = sub.add_parser("tx", help="Manage transmit authorization")
+    tsub = pt.add_subparsers(dest="tx_cmd", required=True)
+    tsub.add_parser("status", help="Show transmit settings")
+    tsub.add_parser("disable", help="Disable transmit")
+    te = tsub.add_parser("enable", help="Enable transmit with a frequency allow-list")
+    te.add_argument("--allow", action="append", metavar="MHZ-MHZ",
+                    help="Allowed TX range (repeatable), e.g. --allow 433.0-434.8")
+    te.add_argument("--jurisdiction", help="Your jurisdiction (for reports)")
+    te.add_argument("--yes", action="store_true", help="Accept legal terms non-interactively")
+    pt.set_defaults(func=cmd_tx)
+
+    pdf = sub.add_parser("defense", help="Defensive analysis: detect attacks, assess resilience")
+    fsub = pdf.add_subparsers(dest="defense_cmd", required=True)
+
+    fm = fsub.add_parser("monitor", help="Detect jamming / interference on a band")
+    fm.add_argument("start", type=float, help="Start frequency (MHz)")
+    fm.add_argument("stop", type=float, help="Stop frequency (MHz)")
+    fm.add_argument("--samples", type=int, default=12, help="Number of sweeps to take")
+    fm.add_argument("--interval", type=float, default=1.0, help="Seconds between sweeps")
+    fm.add_argument("--threshold", type=float, default=10.0,
+                    help="Noise-floor rise over baseline that triggers an alarm (dB)")
+    fm.add_argument("--simulate", action="store_true", help="Synthesise a jamming event")
+
+    fr = fsub.add_parser("rolling-assess", help="Assess a device's fixed/rolling-code posture")
+    fr.add_argument("--file", help="Text file of captured payloads, one per line")
+    fr.add_argument("--kind", default="fixed", choices=["fixed", "counter", "rolling"],
+                    help="With --simulate, which synthetic device to model")
+    fr.add_argument("--simulate", action="store_true", help="Use synthetic payloads")
+
+    frc = fsub.add_parser("replay-check", help="Detect replay attacks in observed transmissions")
+    frc.add_argument("--file", help="'timestamp payload' per line")
+    frc.add_argument("--fixed", action="store_true",
+                     help="Device uses a fixed code (only flag implausibly fast repeats)")
+    frc.add_argument("--simulate", action="store_true", help="Use a synthetic replay trace")
+
+    fbl = fsub.add_parser("baseline", help="TSCM: save a known-good spectrum and diff for rogue emitters")
+    blsub = fbl.add_subparsers(dest="baseline_cmd", required=True)
+    bsave = blsub.add_parser("save", help="Save a baseline sweep")
+    bsave.add_argument("start", type=float, help="Start MHz")
+    bsave.add_argument("stop", type=float, help="Stop MHz")
+    bsave.add_argument("--out", required=True, help="Baseline output path (.json)")
+    bsave.add_argument("--simulate", action="store_true")
+    bdiff = blsub.add_parser("diff", help="Diff current spectrum against a saved baseline")
+    bdiff.add_argument("file", help="Saved baseline .json")
+    bdiff.add_argument("--threshold", type=float, default=10.0,
+                       help="dB increase over baseline that flags an emitter")
+    bdiff.add_argument("--simulate", action="store_true")
+
+    fsc = fsub.add_parser("spoof-check", help="Detect ADS-B / AIS spoofing in decoded messages")
+    fsc.add_argument("protocol", choices=["adsb", "ais"])
+    fsc.add_argument("--file", help="JSON array of decoded messages")
+    fsc.add_argument("--simulate", action="store_true", help="Use a synthetic spoofed stream")
+
+    fds = fsub.add_parser("drone-scan", help="Counter-UAS: scan drone control/video bands")
+    fds.add_argument("--simulate", action="store_true")
+
+    fhp = fsub.add_parser("hop-detect", help="Detect frequency-hopping (agile) emitters")
+    fhp.add_argument("--simulate", action="store_true")
+
+    fic = fsub.add_parser("imsi-catcher",
+                          help="Detect rogue base station / IMSI-catcher indicators (defensive)")
+    fic.add_argument("--file", help="JSON array of observed cell records")
+    fic.add_argument("--simulate", action="store_true")
+
+    frs = fsub.add_parser("respond", help="Show the defensive counter-threat playbook for a threat")
+    frs.add_argument("threat", help="jamming|gps_spoof|adsb_spoof|ais_spoof|drone|rogue_emitter|replay")
+
+    fres = fsub.add_parser("resilience", help="Resilience-test YOUR OWN device and report")
+    fres.add_argument("--device", help="Name/label of the device under test")
+    fres.add_argument("--payloads", help="Text file of captured payloads (one per line)")
+    fres.add_argument("--replayed", action="store_true",
+                      help="You performed the gated replay (rfhound replay --authorized)")
+    fres.add_argument("--actuated", type=lambda s: s.lower() in ("1", "true", "yes", "y"),
+                      default=None, help="Did the device actuate on replay? true/false")
+    fres.add_argument("--simulate", action="store_true", help="Run a synthetic resilience test")
+    pdf.set_defaults(func=cmd_defense)
+
+    sub.add_parser("dev", help="Developer diagnostics").set_defaults(func=cmd_dev)
+
+    pa = sub.add_parser("ask", help="Ask the LLM copilot (receive/analysis only)")
+    pa.add_argument("query", help="Natural-language request")
+    pa.add_argument("--provider", choices=["offline", "anthropic", "local"],
+                    help="LLM backend (default: config or offline)")
+    pa.set_defaults(func=cmd_ask)
+
+    ph = sub.add_parser("hub", help="Run the multi-node aggregator hub")
+    ph.add_argument("--host", default="127.0.0.1")
+    ph.add_argument("--port", type=int, default=8787)
+    ph.add_argument("--token", default="", help="Shared bearer token for node auth")
+    ph.set_defaults(func=cmd_hub)
+
+    pn = sub.add_parser("node", help="Push this receiver's findings to a hub")
+    pn.add_argument("--hub", help="Hub URL, e.g. http://10.0.0.5:8787")
+    pn.add_argument("--id", help="Node id")
+    pn.add_argument("--name", help="Node display name")
+    pn.add_argument("--location", help="Node location label")
+    pn.add_argument("--scan", choices=["recon", "drone", "imsi"],
+                    help="Run this scan and push the result")
+    pn.add_argument("--token", default="", help="Shared bearer token")
+    pn.add_argument("--simulate", action="store_true")
+    pn.set_defaults(func=cmd_node)
+
+    pg = sub.add_parser("gnuradio", help="GNU Radio receive/analysis flowgraph presets")
+    gsub = pg.add_subparsers(dest="gr_cmd")
+    gsub.add_parser("status", help="Check whether GNU Radio + gr-osmosdr are installed")
+    gsub.add_parser("list", help="List prebuilt flowgraph presets")
+    ggen = gsub.add_parser("gen", help="Generate a runnable flowgraph")
+    ggen.add_argument("preset", help="Preset id (see 'gnuradio list')")
+    ggen.add_argument("--freq", type=float, required=True, help="Center frequency (MHz)")
+    ggen.add_argument("--rate", type=int, help="Sample rate (Hz)")
+    ggen.add_argument("--out", help="Output .py path")
+    ggen.add_argument("--data-out", help="Preset output file (wav/iq/f32)")
+    ggen.add_argument("--quiet", action="store_true", help="Don't print the generated code")
+    pg.set_defaults(func=cmd_gnuradio, gr_cmd="list")
+
+    pm = sub.add_parser("mods", help="Manage extension mods/plugins")
+    msub = pm.add_subparsers(dest="mods_cmd")
+    ml = msub.add_parser("list", help="Load and list mods")
+    ml.add_argument("--dir", help="Mods directory (default ~/.config/rfhound/mods)")
+    msub.add_parser("sample", help="Write a sample mod to the mods directory")
+    pm.set_defaults(func=cmd_mods, mods_cmd="list", dir=None)
+
+    pcfg = sub.add_parser("config", help="Show / init configuration")
+    csub = pcfg.add_subparsers(dest="config_cmd")
+    csub.add_parser("show", help="Print current config")
+    csub.add_parser("init", help="Write a default config file")
+    csub.add_parser("path", help="Print config file path")
+    pcfg.set_defaults(func=cmd_config, config_cmd="show")
+
+    return p
+
+
+def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    parser = build_parser()
+    args = parser.parse_args(argv)
+
+    cfg = load_config()
+    if getattr(args, "dev", False):
+        cfg.dev_mode = True
+        console.set_debug(True)
+
+    # Global simulate mode (flag or config) forces synthetic data everywhere.
+    if getattr(args, "simulate_global", False) or cfg.simulate_mode:
+        cfg.simulate_mode = True
+        if hasattr(args, "simulate"):
+            args.simulate = True
+        console.debug("global simulate mode active")
+
+    if not getattr(args, "command", None):
+        # No subcommand -> friendly interactive menu.
+        console.banner(__version__)
+        from .menu import run_menu
+        return run_menu(cfg)
+
+    try:
+        return args.func(args, cfg)
+    except RFHoundError as exc:
+        console.error(str(exc))
+        if cfg.dev_mode:
+            raise
+        return 2
+    except KeyboardInterrupt:
+        console.warn("Interrupted.")
+        return 130
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.venv/
+venv/
+
+# RFHound output artefacts
+*.sigmf-data
+*.sigmf-meta
+*.iq
+rfhound-captures/
+rfhound-recon.*

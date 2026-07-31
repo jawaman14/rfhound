@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RFHound — RF Situational Awareness</title>
+<style>
+  :root{
+    --bg:#0a0e14; --bg2:#0d1420; --panel:#111826; --panel2:#161f30; --border:#1f2b3d;
+    --text:#e8eef6; --dim:#8595a8; --accent:#38e0c8; --accent2:#5aa2ff;
+    --ok:#3fd07a; --warn:#e3b341; --bad:#ff5c6c; --grid:#16202f;
+    --shadow:0 6px 24px rgba(0,0,0,.35);
+  }
+  @media (prefers-color-scheme: light){
+    :root{--bg:#eef2f7;--bg2:#e7edf5;--panel:#fff;--panel2:#f2f6fb;--border:#d6deea;
+          --text:#141b26;--dim:#5a6b82;--grid:#e6ecf5;--shadow:0 6px 20px rgba(20,40,80,.08)}
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{font-family:"Inter",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+       background:radial-gradient(1200px 600px at 80% -10%,#12203300,var(--bg)) fixed,var(--bg);
+       color:var(--text);min-height:100vh}
+  a{color:var(--accent2);text-decoration:none}
+  /* Layout */
+  .app{display:grid;grid-template-columns:210px 1fr;min-height:100vh}
+  .side{background:linear-gradient(180deg,var(--bg2),var(--bg));border-right:1px solid var(--border);
+        padding:18px 14px;display:flex;flex-direction:column;gap:6px;position:sticky;top:0;height:100vh}
+  .brand{display:flex;align-items:center;gap:9px;font-weight:800;font-size:17px;margin-bottom:14px;letter-spacing:.4px}
+  .brand .dot{width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent)}
+  .nav{display:flex;flex-direction:column;gap:2px;flex:1}
+  .nav a{padding:9px 11px;border-radius:9px;color:var(--dim);font-size:14px;font-weight:600;display:flex;gap:9px;align-items:center}
+  .nav a:hover{background:var(--panel2);color:var(--text)}
+  .nav a.active{background:var(--panel2);color:var(--accent)}
+  .side .foot{font-size:11px;color:var(--dim);border-top:1px solid var(--border);padding-top:10px}
+  .main{padding:18px 22px 40px;max-width:1500px}
+  /* Topbar */
+  .top{display:flex;align-items:center;gap:14px;margin-bottom:18px}
+  .top h1{font-size:19px;margin:0;font-weight:800}
+  .top .sub{color:var(--dim);font-size:12px}
+  .grow{flex:1}
+  .pill{font-size:12px;padding:5px 11px;border-radius:999px;background:var(--panel);
+        border:1px solid var(--border);color:var(--dim);font-weight:600}
+  .pill.ok{color:var(--ok);border-color:#1e3d2a} .pill.bad{color:var(--bad);border-color:#4a2028}
+  .switch{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--dim);font-weight:600}
+  /* Threat strip */
+  .strip{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:18px}
+  .kpi{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:13px 14px;box-shadow:var(--shadow)}
+  .kpi .k{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.8px;font-weight:700}
+  .kpi .v{font-size:24px;font-weight:800;margin-top:3px}
+  .kpi .v.ok{color:var(--ok)} .kpi .v.bad{color:var(--bad)} .kpi .v.warn{color:var(--warn)}
+  /* Panels */
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:16px;box-shadow:var(--shadow)}
+  .card.full{grid-column:1/-1}
+  .card h2{margin:0 0 12px;font-size:13px;color:var(--accent);text-transform:uppercase;letter-spacing:1.2px}
+  .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+  label{font-size:12px;color:var(--dim);font-weight:600}
+  input[type=number],input[type=text]{background:var(--panel2);border:1px solid var(--border);
+      color:var(--text);border-radius:8px;padding:7px 9px;width:88px;font-size:13px}
+  input[type=text]{width:200px}
+  button{background:linear-gradient(180deg,var(--accent2),#4790f0);color:#031225;border:0;border-radius:8px;
+      padding:8px 13px;font-weight:700;cursor:pointer;font-size:13px}
+  button:hover{filter:brightness(1.08)} button:active{transform:translateY(1px)}
+  button.ghost{background:var(--panel2);color:var(--text);border:1px solid var(--border)}
+  canvas{width:100%;background:#04070d;border-radius:10px;display:block;border:1px solid var(--border)}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--border)}
+  th{color:var(--dim);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+  tr:last-child td{border-bottom:0}
+  .tag{font-size:11px;padding:2px 7px;border-radius:5px;background:var(--panel2);color:var(--accent);font-weight:600}
+  .sev-high{color:var(--bad);font-weight:700} .sev-medium{color:var(--warn);font-weight:700}
+  .muted{color:var(--dim);font-size:12px}
+  .alert{color:var(--bad);font-weight:700} .clean{color:var(--ok);font-weight:700}
+  .scroll{max-height:260px;overflow:auto}
+  .section{scroll-margin-top:16px}
+  footer{color:var(--dim);font-size:11px;margin-top:22px;border-top:1px solid var(--border);padding-top:12px}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand"><span class="dot"></span> RFHound</div>
+    <nav class="nav">
+      <a href="#spectrum" class="active">📈 Spectrum</a>
+      <a href="#recon">🛰️ Recon</a>
+      <a href="#threats">🛡️ Threats</a>
+      <a href="#bands">📚 Knowledge base</a>
+      <a href="#system">⚙️ System</a>
+    </nav>
+    <div class="foot">Receive-and-analyse only.<br>No transmit endpoint.<br><span id="ver2"></span></div>
+  </aside>
+
+  <main class="main">
+    <div class="top">
+      <div>
+        <h1>RF Situational Awareness</h1>
+        <div class="sub" id="clock"></div>
+      </div>
+      <span class="grow"></span>
+      <span class="switch"><input type="checkbox" id="sim"> Simulate</span>
+      <span class="pill" id="devPill">device: …</span>
+      <span class="pill" id="verPill">v…</span>
+    </div>
+
+    <!-- Threat KPI strip -->
+    <div class="strip">
+      <div class="kpi"><div class="k">Jamming</div><div class="v" id="kpiJam">—</div></div>
+      <div class="kpi"><div class="k">Spoofing</div><div class="v" id="kpiSpoof">—</div></div>
+      <div class="kpi"><div class="k">Drones</div><div class="v" id="kpiDrone">—</div></div>
+      <div class="kpi"><div class="k">Rogue BTS</div><div class="v" id="kpiImsi">—</div></div>
+      <div class="kpi"><div class="k">Active bands</div><div class="v" id="kpiBands">—</div></div>
+    </div>
+
+    <!-- Spectrum -->
+    <div class="card full section" id="spectrum">
+      <h2>Spectrum &amp; waterfall</h2>
+      <div class="row">
+        <label>Start</label><input type="number" id="fStart" value="430" step="1"><span class="muted">MHz</span>
+        <label>Stop</label><input type="number" id="fStop" value="440" step="1"><span class="muted">MHz</span>
+        <button id="sweepBtn">Sweep</button>
+        <span class="switch"><input type="checkbox" id="autoSweep"> Auto</span>
+        <span class="muted" id="sweepInfo"></span>
+      </div>
+      <canvas id="spectrum-cv" height="150"></canvas>
+      <canvas id="waterfall" height="130" style="margin-top:8px"></canvas>
+      <div class="scroll" style="margin-top:10px">
+        <table id="peaks"><thead><tr><th>Freq (MHz)</th><th>Power dB</th><th>Band</th><th>Decoder</th></tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+
+    <div class="grid">
+      <!-- Recon -->
+      <div class="card section" id="recon">
+        <h2>Recon survey</h2>
+        <div class="row"><button id="reconBtn">Run recon</button><span class="muted" id="reconInfo"></span></div>
+        <div class="scroll"><table id="reconTbl"><thead><tr><th>Band</th><th>Status</th><th>Peaks</th><th>Strongest</th><th>Decoder</th></tr></thead><tbody></tbody></table></div>
+      </div>
+
+      <!-- Threats -->
+      <div class="card section" id="threats">
+        <h2>Threat detection</h2>
+        <div class="row">
+          <button id="droneBtn" class="ghost">Counter-UAS</button>
+          <button id="adsbBtn" class="ghost">ADS-B spoof</button>
+          <button id="imsiBtn" class="ghost">IMSI catcher</button>
+          <button id="hopBtn" class="ghost">Hop detect</button>
+        </div>
+        <div id="threatOut" class="scroll"><p class="muted">Run a check to populate.</p></div>
+      </div>
+
+      <!-- Bands -->
+      <div class="card section" id="bands">
+        <h2>Frequency knowledge base</h2>
+        <div class="row">
+          <label>At</label><input type="number" id="atFreq" value="433.92" step="0.01" style="width:110px"><span class="muted">MHz</span>
+          <button id="atBtn" class="ghost">What's here?</button>
+        </div>
+        <div id="atOut" class="muted" style="margin-bottom:10px"></div>
+        <div class="row"><label>Search</label><input type="text" id="bandSearch" placeholder="tpms, adsb, drone, cellular…"></div>
+        <div class="scroll"><table id="bandsTbl"><thead><tr><th>Range (MHz)</th><th>Name</th><th>Category</th><th>Decoder</th></tr></thead><tbody></tbody></table></div>
+      </div>
+
+      <!-- System -->
+      <div class="card section" id="system">
+        <h2>Hardware &amp; tools</h2>
+        <div id="hw" class="muted">…</div>
+        <div class="scroll" style="margin-top:10px"><table id="tools"><thead><tr><th>Tool</th><th>Ready</th><th>Purpose</th></tr></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+
+    <footer>RFHound dashboard · receive-and-analyse only · no transmit endpoint · REST API under <code>/api/</code></footer>
+  </main>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const sim = () => $('#sim').checked ? '1' : '0';
+async function api(p){ const r = await fetch(p); if(!r.ok) throw new Error(r.status); return r.json(); }
+function setKpi(id, val, cls){ const e=$(id); e.textContent=val; e.className='v '+(cls||''); }
+
+// clock
+setInterval(()=>{ $('#clock').textContent = new Date().toUTCString().replace('GMT','UTC'); }, 1000);
+
+// nav highlight
+document.querySelectorAll('.nav a').forEach(a=>a.onclick=()=>{
+  document.querySelectorAll('.nav a').forEach(x=>x.classList.remove('active')); a.classList.add('active');});
+
+// ---- spectrum + waterfall ----
+const specCv=$('#spectrum-cv'), wfCv=$('#waterfall'); let wfRows=[];
+function fit(cv){const w=cv.clientWidth; if(cv.width!==w)cv.width=w; return cv.width;}
+function heat(v){const r=Math.max(0,Math.min(255,255*(v-0.5)*2)),g=Math.max(0,Math.min(255,255*(1-Math.abs(v-0.6)*2))),b=Math.max(0,Math.min(255,255*(0.75-v)*2));return[r|0,g|0,b|0];}
+function drawSpectrum(d){
+  const w=fit(specCv),h=specCv.height,ctx=specCv.getContext('2d');ctx.clearRect(0,0,w,h);
+  const s=d.spectrum,min=d.min_db-3,max=d.max_db+3,rng=Math.max(1,max-min);
+  ctx.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--grid');ctx.lineWidth=1;
+  for(let i=0;i<=4;i++){const y=h*i/4;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}
+  ctx.beginPath();ctx.moveTo(0,h);
+  for(let i=0;i<s.length;i++){const x=w*i/(s.length-1),y=h-((s[i]-min)/rng)*h;ctx.lineTo(x,y);}
+  ctx.lineTo(w,h);ctx.closePath();ctx.fillStyle='rgba(56,224,200,.16)';ctx.fill();
+  ctx.beginPath();for(let i=0;i<s.length;i++){const x=w*i/(s.length-1),y=h-((s[i]-min)/rng)*h;i?ctx.lineTo(x,y):ctx.moveTo(x,y);}
+  ctx.strokeStyle='#38e0c8';ctx.lineWidth=1.6;ctx.stroke();
+  ctx.fillStyle='#8595a8';ctx.font='11px system-ui';
+  ctx.fillText(d.start_mhz.toFixed(1)+' MHz',5,h-5);ctx.fillText(d.stop_mhz.toFixed(1)+' MHz',w-72,h-5);
+  wfRows.unshift(s.map(v=>(v-min)/rng));if(wfRows.length>wfCv.height)wfRows.pop();drawWaterfall();
+}
+function drawWaterfall(){
+  const w=fit(wfCv),h=wfCv.height,ctx=wfCv.getContext('2d'),img=ctx.createImageData(w,h);
+  for(let y=0;y<wfRows.length;y++){const row=wfRows[y];
+    for(let x=0;x<w;x++){const v=Math.max(0,Math.min(1,row[Math.floor(x/w*row.length)]||0)),c=heat(v),o=(y*w+x)*4;
+      img.data[o]=c[0];img.data[o+1]=c[1];img.data[o+2]=c[2];img.data[o+3]=255;}}
+  ctx.putImageData(img,0,0);
+}
+async function doSweep(){
+  try{const d=await api(`/api/sweep?start=${$('#fStart').value}&stop=${$('#fStop').value}&simulate=${sim()}`);
+    drawSpectrum(d);
+    $('#sweepInfo').textContent=`floor ${d.noise_floor_db} dB · ${d.peaks.length} peaks`+(d.simulated?' · SIMULATED':'');
+    const tb=$('#peaks tbody');tb.innerHTML='';
+    d.peaks.forEach(p=>tb.insertAdjacentHTML('beforeend',
+      `<tr><td>${p.freq_mhz.toFixed(4)}</td><td>${p.power_db}</td><td>${p.band||'—'}</td><td>${p.decoder?`<span class="tag">${p.decoder}</span>`:'—'}</td></tr>`));
+  }catch(e){$('#sweepInfo').textContent='error: '+e.message;}
+}
+async function doRecon(){
+  $('#reconInfo').textContent='running…';
+  const d=await api(`/api/recon?simulate=${sim()}`);
+  $('#reconInfo').textContent=`${d.active}/${d.total} active`+(d.simulated?' · SIMULATED':'');
+  setKpi('#kpiBands', d.active, d.active? 'warn':'ok');
+  const tb=$('#reconTbl tbody');tb.innerHTML='';
+  d.findings.forEach(f=>tb.insertAdjacentHTML('beforeend',
+    `<tr><td>${f.band}</td><td>${f.active?'<span class=alert>active</span>':'<span class=muted>quiet</span>'}</td><td>${f.peaks}</td><td>${f.strongest_mhz?f.strongest_mhz.toFixed(3):'—'}</td><td>${f.decoder||'—'}</td></tr>`));
+}
+function threatHtml(title,count,rowsHtml){
+  return (count?`<p class="alert">${title}: ${count}</p>`:`<p class="clean">${title}: none</p>`)+(rowsHtml||'');
+}
+async function doDrone(){
+  const d=await api(`/api/defense/drone?simulate=${sim()}`);
+  setKpi('#kpiDrone', d.hits.length, d.hits.length?'bad':'ok');
+  let h=d.hits.map(x=>`<div class="muted">• ${x.band} — ${x.freq_mhz} MHz (${x.confidence})</div>`).join('');
+  $('#threatOut').innerHTML=threatHtml('Counter-UAS detections',d.hits.length,h);
+}
+async function doAdsb(){
+  const d=await api(`/api/defense/spoof/adsb?simulate=${sim()}`);
+  setKpi('#kpiSpoof', d.findings.length, d.findings.length?'bad':'ok');
+  let h=d.findings.map(f=>`<div class="muted">• <span class="sev-high">[high]</span> <b>${f.id}</b> — ${f.kind}: ${f.detail}</div>`).join('');
+  $('#threatOut').innerHTML=threatHtml('ADS-B spoofing indicators',d.findings.length,h);
+}
+async function doImsi(){
+  const d=await api(`/api/defense/imsi?simulate=${sim()}`);
+  setKpi('#kpiImsi', d.alerts.length?d.score:0, d.alerts.length?'bad':'ok');
+  let h=d.alerts.map(a=>`<div class="muted">• <span class="sev-${a.severity}">[${a.severity}]</span> CID=${a.cid} ${a.indicator}: ${a.detail}</div>`).join('');
+  $('#threatOut').innerHTML=`<p class="${d.alerts.length?'alert':'clean'}">Rogue-BTS likelihood ${d.score}/100</p>`+h;
+}
+async function doHop(){
+  const d=await api(`/api/defense/hop?simulate=${sim()}`);
+  $('#threatOut').innerHTML=`<p class="${d.hopping_suspected?'alert':'clean'}">Frequency hopping ${d.hopping_suspected?'SUSPECTED':'not detected'}</p><div class="muted">${d.detail}</div>`;
+}
+let allBands=[];
+function renderBands(){
+  const q=$('#bandSearch').value.toLowerCase(),tb=$('#bandsTbl tbody');tb.innerHTML='';
+  allBands.filter(b=>!q||b.name.toLowerCase().includes(q)||b.category.includes(q)||(b.tags||[]).join(' ').includes(q))
+   .forEach(b=>tb.insertAdjacentHTML('beforeend',
+     `<tr><td>${b.low_mhz.toFixed(3)}–${b.high_mhz.toFixed(3)}</td><td>${b.name}</td><td>${b.category}</td><td>${b.decoder||'—'}</td></tr>`));
+}
+async function loadStatus(){
+  const d=await api('/api/status');
+  $('#verPill').textContent='v'+d.version;$('#ver2').textContent='v'+d.version;
+  const dev=$('#devPill');
+  if(d.device.present){dev.textContent='HackRF: '+(d.device.serial||'connected');dev.className='pill ok';}
+  else{dev.textContent='no HackRF (simulate)';dev.className='pill bad';$('#sim').checked=true;}
+  const hw=d.hardware;
+  $('#hw').innerHTML=`LNA ${hw.lna_gain} dB · VGA ${hw.vga_gain} dB · amp ${hw.amp_enable?'on':'off'} · bias-tee ${hw.antenna_power?'on':'off'} · ${(hw.sample_rate/1e6)} MSPS`;
+  const tb=$('#tools tbody');tb.innerHTML='';
+  d.tools.forEach(t=>tb.insertAdjacentHTML('beforeend',
+    `<tr><td>${t.name}</td><td>${t.installed?'<span class=clean>✓</span>':'<span class=muted>—</span>'}</td><td class=muted>${t.purpose}</td></tr>`));
+}
+async function loadBands(){allBands=(await api('/api/bands')).bands;renderBands();}
+async function refreshKpis(){ try{await doDrone();await doAdsb();await doImsi();}catch(e){} }
+
+$('#sweepBtn').onclick=doSweep;$('#reconBtn').onclick=doRecon;
+$('#droneBtn').onclick=doDrone;$('#adsbBtn').onclick=doAdsb;$('#imsiBtn').onclick=doImsi;$('#hopBtn').onclick=doHop;
+async function doAt(){
+  const d=await api(`/api/at?freq=${$('#atFreq').value}`);
+  if(!d.found){$('#atOut').innerHTML=`<span class="warn">${d.freq_mhz} MHz not in the band plan.</span>`;return;}
+  $('#atOut').innerHTML=`<b style="color:var(--accent)">${d.band}</b> `+
+    `<span class="tag">${d.category}</span> ${d.range_mhz[0].toFixed(3)}–${d.range_mhz[1].toFixed(3)} MHz`+
+    `<div style="margin-top:5px">Decoders: ${d.decoders.map(x=>`<span class="tag">${x}</span>`).join(' ')||'—'}</div>`+
+    `<div style="margin-top:4px">Detectors: ${d.detectors.slice(0,3).join(' · ')}</div>`+
+    `<div style="margin-top:4px">Try: <code>${d.commands[2]||d.commands[0]}</code></div>`;
+}
+$('#atBtn').onclick=doAt;
+$('#bandSearch').oninput=renderBands;
+let autoTimer=null;$('#autoSweep').onchange=e=>{if(e.target.checked)autoTimer=setInterval(doSweep,1500);else clearInterval(autoTimer);};
+window.addEventListener('resize',drawWaterfall);
+loadStatus().then(loadBands).then(doSweep).then(doRecon).then(refreshKpis).catch(e=>console.error(e));
+</script>
+</body>
+</html>

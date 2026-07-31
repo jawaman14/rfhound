@@ -1,0 +1,7 @@
+# RFHound Python dependencies.
+# rich is optional at runtime (RFHound degrades to plain text), but recommended.
+rich>=13.0
+
+# --- Dev / test ---
+# pytest>=7.0
+# flake8>=6.0

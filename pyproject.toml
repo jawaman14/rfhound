@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rfhound"
+version = "1.0.0"
+description = "A friendly, powerful HackRF reconnaissance & pentesting toolkit"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "RFHound contributors" }]
+keywords = ["hackrf", "sdr", "rf", "pentesting", "security", "gnuradio", "sigint"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Security",
+    "Topic :: Communications :: Ham Radio",
+    "Intended Audience :: Information Technology",
+]
+dependencies = [
+    "rich>=13.0; python_version >= '3.9'",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0", "flake8>=6.0"]
+
+[project.scripts]
+rfhound = "rfhound.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/jawaman14/AutoGPT/tree/main/rfhound"
+
+[tool.setuptools.packages.find]
+include = ["rfhound*"]
+
+[tool.setuptools.package-data]
+"rfhound.web" = ["*.html"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
