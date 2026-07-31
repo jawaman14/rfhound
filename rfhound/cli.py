@@ -64,6 +64,32 @@ def cmd_doctor(args: argparse.Namespace, cfg: Config) -> int:
     return 0
 
 
+def cmd_setup(args: argparse.Namespace, cfg: Config) -> int:
+    """One-time, no-friction setup summary: config, tools, device, next steps."""
+    console.banner(__version__)
+    path = config_path()
+    if not path.exists():
+        save_config(cfg)
+        console.success(f"Wrote a default config to {path}")
+    else:
+        console.info(f"Config already present at {path}")
+    console.print_(f"Captures will be saved to: {cfg.output_dir}")
+
+    statuses = proc.tool_status()
+    installed = sum(1 for _, ok, _ in statuses if ok)
+    console.print_(f"External SDR tools detected: {installed}/{len(statuses)} "
+                   f"(run 'rfhound doctor' for the full list + install hints)")
+    console.print_(f"HackRF: {'detected ✓' if device.is_present() else 'not detected — use --simulate'}")
+
+    console.rule("Next steps")
+    console.print_("  rfhound --simulate recon        # try the whole workflow, no hardware")
+    console.print_("  rfhound at 433.92               # what's on a frequency + every tool for it")
+    console.print_("  rfhound tune adsb               # what frequency do I need?")
+    console.print_("  rfhound --simulate web --open   # open the dashboard")
+    console.print_("  Full walkthrough: docs/TUTORIAL.md")
+    return 0
+
+
 def cmd_bands(args: argparse.Namespace, cfg: Config) -> int:
     bands = bandplan.BANDS
     if args.category:
@@ -731,6 +757,7 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Global simulate mode: run everything against synthetic data")
     sub = p.add_subparsers(dest="command")
 
+    sub.add_parser("setup", help="One-time setup summary + next steps").set_defaults(func=cmd_setup)
     sub.add_parser("doctor", help="Check tools, HackRF device and config").set_defaults(func=cmd_doctor)
     sub.add_parser("menu", help="Launch the guided interactive menu").set_defaults(func=cmd_menu)
 

@@ -12,6 +12,16 @@ def test_version_exits_zero(capsys):
         assert e.code == 0
 
 
+def test_setup_runs(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    rc = run(["setup"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "Next steps" in out
+    # It should have written a config file.
+    assert (tmp_path / "rfhound" / "config.json").exists()
+
+
 def test_bands_list(capsys):
     rc = run(["bands"])
     out = capsys.readouterr().out

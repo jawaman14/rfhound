@@ -65,11 +65,24 @@ the law. That's RFHound.
 
 ## Install
 
+**One command** (creates a virtual environment and installs everything):
+
 ```bash
+git clone https://github.com/jawaman14/rfhound.git
 cd rfhound
-pip install -e .          # installs the `rfhound` command (+ rich)
-# or, minimal:  pip install rich   &&   python -m rfhound
+./install.sh          # add --dev to include the test tools
+rfhound setup         # one-time setup summary + next steps
 ```
+
+Prefer to do it by hand (or on Windows)?
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e .
+```
+
+New here? Follow the step-by-step **[tutorial](docs/TUTORIAL.md)** — it gets you
+running in ~5 minutes, with or without a HackRF. `make help` lists handy tasks.
 
 Then install the external SDR tools you want RFHound to drive (all optional —
 `rfhound doctor` tells you what's present and how to get the rest):
