@@ -53,6 +53,26 @@ def test_bands(base_url):
     assert any("ADS-B" in b["name"] for b in data["bands"])
 
 
+def test_bookmarks_endpoint(base_url):
+    code, data = get(base_url + "/api/bookmarks")
+    assert code == 200
+    assert "bookmarks" in data
+
+
+def test_dashboard_has_smeter_and_bookmarks(base_url):
+    import urllib.request
+    with urllib.request.urlopen(base_url + "/", timeout=5) as r:
+        html = r.read().decode()
+    assert "S-METER" in html and "smeterFill" in html
+    assert 'id="bookmarks"' in html and "loadBookmarks" in html
+
+
+def test_sweep_has_smeter_fields(base_url):
+    code, data = get(base_url + "/api/sweep?start=433&stop=435")
+    assert code == 200
+    assert "max_db" in data and "noise_floor_db" in data  # S-meter inputs
+
+
 def test_sweep_simulated(base_url):
     code, data = get(base_url + "/api/sweep?start=433&stop=435")
     assert code == 200

@@ -63,6 +63,14 @@
   button:hover{filter:brightness(1.08)} button:active{transform:translateY(1px)}
   button.ghost{background:var(--panel2);color:var(--text);border:1px solid var(--border)}
   canvas{width:100%;background:#04070d;border-radius:10px;display:block;border:1px solid var(--border)}
+  .smeter{display:flex;align-items:center;gap:10px;margin:4px 0 10px}
+  .smeter-label{font-size:10px;font-weight:800;letter-spacing:1px;color:var(--dim)}
+  .smeter-track{flex:1;height:12px;border-radius:6px;background:var(--panel2);border:1px solid var(--border);overflow:hidden}
+  .smeter-fill{height:100%;width:0;border-radius:6px;transition:width .3s ease,background .3s ease}
+  .smeter-val{font-size:12px;font-weight:700;min-width:56px;text-align:right}
+  .bm-row{display:flex;justify-content:space-between;padding:7px 4px;border-bottom:1px solid var(--border);cursor:pointer}
+  .bm-row:hover{background:var(--panel2)}
+  .bm-row .f{color:var(--accent);font-weight:700}
   table{width:100%;border-collapse:collapse;font-size:13px}
   th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--border)}
   th{color:var(--dim);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.5px}
@@ -121,6 +129,11 @@
         <span class="switch"><input type="checkbox" id="autoSweep"> Auto</span>
         <span class="muted" id="sweepInfo"></span>
       </div>
+      <div class="smeter" title="Strongest signal in view (SNR over the noise floor)">
+        <span class="smeter-label">S-METER</span>
+        <div class="smeter-track"><div class="smeter-fill" id="smeterFill"></div></div>
+        <span class="smeter-val" id="smeterVal">— dB</span>
+      </div>
       <canvas id="spectrum-cv" height="150"></canvas>
       <canvas id="waterfall" height="130" style="margin-top:8px"></canvas>
       <div class="scroll" style="margin-top:10px">
@@ -146,6 +159,12 @@
           <button id="hopBtn" class="ghost">Hop detect</button>
         </div>
         <div id="threatOut" class="scroll"><p class="muted">Run a check to populate.</p></div>
+      </div>
+
+      <!-- Bookmarks -->
+      <div class="card section" id="bookmarks">
+        <h2>Bookmarks</h2>
+        <div id="bmOut" class="scroll"><p class="muted">Loading… (add with <code>rfhound bookmark add</code>)</p></div>
       </div>
 
       <!-- Bands -->
@@ -211,9 +230,16 @@ function drawWaterfall(){
       img.data[o]=c[0];img.data[o+1]=c[1];img.data[o+2]=c[2];img.data[o+3]=255;}}
   ctx.putImageData(img,0,0);
 }
+function updateSMeter(d){
+  const snr=Math.max(0,(d.max_db??d.noise_floor_db)-d.noise_floor_db); // dB over floor
+  const pct=Math.max(3,Math.min(100,snr/60*100));                       // 0–60 dB scale
+  const col=snr>35?'var(--bad)':snr>20?'var(--warn)':'var(--ok)';
+  const fill=$('#smeterFill'); fill.style.width=pct+'%'; fill.style.background=col;
+  $('#smeterVal').textContent=snr.toFixed(0)+' dB';
+}
 async function doSweep(){
   try{const d=await api(`/api/sweep?start=${$('#fStart').value}&stop=${$('#fStop').value}&simulate=${sim()}`);
-    drawSpectrum(d);
+    drawSpectrum(d); updateSMeter(d);
     $('#sweepInfo').textContent=`floor ${d.noise_floor_db} dB · ${d.peaks.length} peaks`+(d.simulated?' · SIMULATED':'');
     const tb=$('#peaks tbody');tb.innerHTML='';
     d.peaks.forEach(p=>tb.insertAdjacentHTML('beforeend',
@@ -278,6 +304,19 @@ async function loadStatus(){
     `<tr><td>${t.name}</td><td>${t.installed?'<span class=clean>✓</span>':'<span class=muted>—</span>'}</td><td class=muted>${t.purpose}</td></tr>`));
 }
 async function loadBands(){allBands=(await api('/api/bands')).bands;renderBands();}
+function tuneTo(freq){
+  const f=+freq; $('#atFreq').value=f.toFixed(4); doAt();
+  $('#fStart').value=(f-1).toFixed(2); $('#fStop').value=(f+1).toFixed(2); doSweep();
+  document.getElementById('spectrum').scrollIntoView({behavior:'smooth',block:'start'});
+}
+async function loadBookmarks(){
+  const bm=(await api('/api/bookmarks')).bookmarks||[];
+  const el=$('#bmOut');
+  if(!bm.length){el.innerHTML='<p class="muted">No bookmarks. Add with <code>rfhound bookmark add &lt;name&gt; &lt;MHz&gt;</code></p>';return;}
+  el.innerHTML=bm.sort((a,b)=>(a.freq_mhz||0)-(b.freq_mhz||0)).map(b=>
+    `<div class="bm-row" data-f="${b.freq_mhz}" title="Click to tune"><span>${b.name}${b.note?` <span class="muted">· ${b.note}</span>`:''}</span><span class="f">${(+b.freq_mhz).toFixed(4)} MHz</span></div>`).join('');
+  el.querySelectorAll('.bm-row').forEach(r=>r.onclick=()=>tuneTo(r.dataset.f));
+}
 async function refreshKpis(){ try{await doDrone();await doAdsb();await doImsi();}catch(e){} }
 
 $('#sweepBtn').onclick=doSweep;$('#reconBtn').onclick=doRecon;
@@ -295,7 +334,7 @@ $('#atBtn').onclick=doAt;
 $('#bandSearch').oninput=renderBands;
 let autoTimer=null;$('#autoSweep').onchange=e=>{if(e.target.checked)autoTimer=setInterval(doSweep,1500);else clearInterval(autoTimer);};
 window.addEventListener('resize',drawWaterfall);
-loadStatus().then(loadBands).then(doSweep).then(doRecon).then(refreshKpis).catch(e=>console.error(e));
+loadStatus().then(loadBands).then(loadBookmarks).then(doSweep).then(doRecon).then(refreshKpis).catch(e=>console.error(e));
 </script>
 </body>
 </html>
