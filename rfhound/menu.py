@@ -219,6 +219,16 @@ def _menu_web(cfg: Config) -> None:
     console.print_("(It runs until Ctrl-C, so start it in its own terminal.)")
 
 
+def _menu_automate(cfg: Config) -> None:
+    from .automation_menu import run_automation_menu
+    run_automation_menu(cfg)
+
+
+def _menu_ai(cfg: Config) -> None:
+    from .ai_menu import run_ai_menu
+    run_ai_menu(cfg)
+
+
 def _menu_doctor(cfg: Config) -> None:
     from .cli import cmd_doctor
     import argparse
@@ -233,6 +243,8 @@ MENU = [
     ("Protocol decoders", lambda c, s: _menu_decoders(c, s)),
     ("Frequency knowledge base", lambda c, s: _menu_bands(c)),
     ("Bookmarks", lambda c, s: _menu_bookmarks(c)),
+    ("Automation console", lambda c, s: _menu_automate(c)),
+    ("AI copilot console", lambda c, s: _menu_ai(c)),
     ("Web dashboard", lambda c, s: _menu_web(c)),
     ("Environment check (doctor)", lambda c, s: _menu_doctor(c)),
     ("Quit", None),

@@ -810,6 +810,11 @@ def cmd_dev(args: argparse.Namespace, cfg: Config) -> int:
     return 0
 
 
+def cmd_ai(args: argparse.Namespace, cfg: Config) -> int:
+    from .ai_menu import run_ai_menu
+    return run_ai_menu(cfg, provider=args.provider)
+
+
 def cmd_ask(args: argparse.Namespace, cfg: Config) -> int:
     from .llm import Copilot
     copilot = Copilot(cfg, provider=args.provider)
@@ -1176,7 +1181,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("dev", help="Developer diagnostics").set_defaults(func=cmd_dev)
 
-    pa = sub.add_parser("ask", help="Ask the LLM copilot (receive/analysis only)")
+    pai = sub.add_parser("ai", help="Interactive AI copilot console (receive/analysis only)")
+    pai.add_argument("--provider", choices=["offline", "anthropic", "local"],
+                     help="LLM backend (default: config or offline)")
+    pai.set_defaults(func=cmd_ai)
+
+    pa = sub.add_parser("ask", help="One-shot LLM copilot query (receive/analysis only)")
     pa.add_argument("query", help="Natural-language request")
     pa.add_argument("--provider", choices=["offline", "anthropic", "local"],
                     help="LLM backend (default: config or offline)")

@@ -64,7 +64,12 @@ def _offline_plan(user: str) -> tuple[str, dict] | None:
             if t.split("_")[0] in u:
                 return "respond", {"threat": t}
         return "respond", {"threat": "jamming"}
-    if "band" in u or "frequency" in u or "mhz" in u:
+    # "what's at 1090 MHz?" / "identify 433.92" → find_band on the number found.
+    import re
+    m = re.search(r"(\d+(?:\.\d+)?)\s*(?:mhz|m)?", u)
+    if m and ("at " in u or "mhz" in u or "identif" in u or "what" in u):
+        return "find_band", {"freq_mhz": float(m.group(1))}
+    if "band" in u or "frequency" in u:
         return "list_bands", {}
     if "status" in u:
         return "status", {}

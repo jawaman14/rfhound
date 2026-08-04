@@ -11,6 +11,20 @@ RFHound can be driven in natural language by a **Claude API** or a **local
 
 ## Usage
 
+**Interactive AI console** (a chat REPL, separate from the main menu):
+
+```bash
+rfhound ai                       # offline by default
+rfhound ai --provider anthropic  # or local
+```
+
+Inside it, type plain English, or use slash commands:
+`/help` · `/actions` (list what it can call) · `/provider <offline|anthropic|local>` ·
+`/history` · `/clear` · `/quit`. The offline planner handles the common asks
+(jamming, drones, IMSI catchers, spoofing, "what's at 1090 MHz?") with no network.
+
+**One-shot** queries:
+
 ```bash
 rfhound ask "is there a jammer on the 433 band?"        # offline planner (default)
 rfhound ask "check for an IMSI catcher" --provider offline
