@@ -19,6 +19,7 @@ from urllib.parse import urlparse, parse_qs
 from .. import __version__, bandplan, console, device, proc
 from ..config import Config, load_config
 from ..modules import cellular as cellular_mod
+from ..modules import classify as classify_mod
 from ..modules import decode as decode_mod
 from ..modules import intel as intel_mod
 from ..modules import recon as recon_mod
@@ -95,12 +96,19 @@ def sweep_dict(cfg: Config, start_mhz: float, stop_mhz: float, *,
         "spectrum": spectrum,
         "simulated": result.simulated,
         "peaks": [
-            {"freq_mhz": round(p.freq_mhz, 4), "power_db": p.power_db,
-             "band": p.band.name if p.band else None,
-             "decoder": p.band.decoder if p.band else None}
-            for p in result.peaks[:25]
+            _peak_dict(result, p) for p in result.peaks[:25]
         ],
     }
+
+
+def _peak_dict(result, p) -> dict:
+    bw = classify_mod.estimate_bandwidth_khz(result, p.freq_hz)
+    guess = classify_mod.classify(p.freq_mhz, bandwidth_khz=bw)[0]
+    return {"freq_mhz": round(p.freq_mhz, 4), "power_db": p.power_db,
+            "band": p.band.name if p.band else None,
+            "decoder": (p.band.decoder if p.band else None) or guess.decoder,
+            "bandwidth_khz": bw,
+            "guess": guess.name, "confidence": guess.likelihood}
 
 
 def recon_dict(cfg: Config, *, simulate: bool) -> dict:
@@ -257,6 +265,15 @@ def _make_handler(state: AppState):
                 if path == "/api/at":
                     freq = float(qs.get("freq", ["100"])[0])
                     return self._send_json(at_dict(freq))
+                if path == "/api/classify":
+                    freq = float(qs.get("freq", ["100"])[0])
+                    bw = qs.get("bw", [None])[0]
+                    mod = qs.get("mod", [None])[0]
+                    matches = classify_mod.classify(
+                        freq, bandwidth_khz=float(bw) if bw else None, modulation=mod)
+                    return self._send_json({"freq_mhz": freq, "matches": [
+                        {"name": m.name, "likelihood": m.likelihood, "decoder": m.decoder,
+                         "category": m.category} for m in matches[:8]]})
                 return self._send_json({"error": "not found", "path": path}, code=404)
             except Exception as exc:  # never leak a stack trace to the client
                 return self._send_json({"error": str(exc)}, code=500)

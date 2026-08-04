@@ -22,6 +22,7 @@ from .modules import gnuradio as gr_mod
 from .modules import response as response_mod
 from .modules import cellular as cellular_mod
 from .modules import toolbox as toolbox_mod
+from .modules import classify as classify_mod
 from . import plugins
 from .modules import recon as recon_mod
 from .modules import replay as replay_mod
@@ -122,6 +123,31 @@ def cmd_bands(args: argparse.Namespace, cfg: Config) -> int:
     return 0
 
 
+def cmd_classify(args: argparse.Namespace, cfg: Config) -> int:
+    matches = classify_mod.classify(args.freq, bandwidth_khz=args.bw, modulation=args.mod)
+    if args.json:
+        import json
+        console.print_(json.dumps([{
+            "name": m.name, "likelihood": m.likelihood, "decoder": m.decoder,
+            "category": m.category, "reasons": m.reasons} for m in matches], indent=2))
+        return 0
+    ctx = f"{args.freq} MHz"
+    if args.bw:
+        ctx += f", ~{args.bw} kHz"
+    if args.mod:
+        ctx += f", {args.mod}"
+    rows = [[f"{m.likelihood}%", m.name, m.decoder or "—", m.category] for m in matches[:8]]
+    console.table(f"Signal match — {ctx}", ["Likelihood", "Likely signal", "Decoder", "Category"], rows)
+    top = matches[0]
+    console.print_(f"\nBest guess: [bold]{top.name}[/bold] ({top.likelihood}%)"
+                   if console.have_rich() else f"\nBest guess: {top.name} ({top.likelihood}%)")
+    console.print_("  why: " + "; ".join(top.reasons))
+    if top.decoder:
+        console.print_(f"  try: rfhound decode run {top.decoder} --freq {args.freq}")
+    console.print_(f"  more: rfhound at {args.freq}")
+    return 0
+
+
 def cmd_at(args: argparse.Namespace, cfg: Config) -> int:
     tb = toolbox_mod.at_frequency(args.freq)
     if not tb:
@@ -199,20 +225,37 @@ def cmd_sweep(args: argparse.Namespace, cfg: Config) -> int:
         )
     sweep_mod.render_spectrum(result)
     if result.peaks:
-        rows = [
-            [
-                f"{p.freq_mhz:.4f}",
-                f"{p.power_db}",
-                p.band.name if p.band else "unknown",
-                p.band.decoder if p.band and p.band.decoder else "-",
+        if args.identify:
+            rows = []
+            for p in result.peaks[: args.top]:
+                bw = classify_mod.estimate_bandwidth_khz(result, p.freq_hz)
+                guess = classify_mod.classify(p.freq_mhz, bandwidth_khz=bw)[0]
+                rows.append([
+                    f"{p.freq_mhz:.4f}", f"{p.power_db}",
+                    f"{bw:.0f} kHz" if bw else "—",
+                    f"{guess.name} ({guess.likelihood}%)",
+                    guess.decoder or "-",
+                ])
+            console.table(
+                f"Top {min(args.top, len(result.peaks))} peaks — auto-identified",
+                ["Freq (MHz)", "Power (dB)", "Bandwidth", "Likely signal", "Decoder"],
+                rows,
+            )
+        else:
+            rows = [
+                [
+                    f"{p.freq_mhz:.4f}",
+                    f"{p.power_db}",
+                    p.band.name if p.band else "unknown",
+                    p.band.decoder if p.band and p.band.decoder else "-",
+                ]
+                for p in result.peaks[: args.top]
             ]
-            for p in result.peaks[: args.top]
-        ]
-        console.table(
-            f"Top {min(args.top, len(result.peaks))} peaks",
-            ["Freq (MHz)", "Power (dB)", "Band", "Decoder"],
-            rows,
-        )
+            console.table(
+                f"Top {min(args.top, len(result.peaks))} peaks",
+                ["Freq (MHz)", "Power (dB)", "Band", "Decoder"],
+                rows,
+            )
     else:
         console.warn("No peaks above the noise floor. Try lowering --snr or adding gain.")
     return 0
@@ -785,6 +828,13 @@ def build_parser() -> argparse.ArgumentParser:
     ptu.add_argument("--json", action="store_true", help="Machine-readable output")
     ptu.set_defaults(func=cmd_tune)
 
+    pcl = sub.add_parser("classify", help="Guess a signal's type + likelihood from its characteristics")
+    pcl.add_argument("freq", type=float, help="Center frequency (MHz)")
+    pcl.add_argument("--bw", type=float, help="Occupied bandwidth (kHz), if known")
+    pcl.add_argument("--mod", help="Modulation hint: ook, fsk, gfsk, fm, am, ofdm, gmsk, pulse…")
+    pcl.add_argument("--json", action="store_true", help="Machine-readable output")
+    pcl.set_defaults(func=cmd_classify)
+
     ps = sub.add_parser("sweep", help="Wideband spectrum sweep")
     ps.add_argument("start", type=float, help="Start frequency (MHz)")
     ps.add_argument("stop", type=float, help="Stop frequency (MHz)")
@@ -792,6 +842,8 @@ def build_parser() -> argparse.ArgumentParser:
     ps.add_argument("--snr", type=float, default=12.0, help="Peak threshold above floor (dB)")
     ps.add_argument("--sweeps", type=int, default=1, help="Number of peak-held passes")
     ps.add_argument("--top", type=int, default=15, help="Show top-N peaks")
+    ps.add_argument("--identify", action="store_true",
+                    help="Auto-identify each peak (bandwidth + likely signal + decoder)")
     ps.add_argument("--watch", action="store_true", help="Live, continuously-updating spectrum")
     ps.add_argument("--interval", type=float, default=1.0, help="Seconds between watch frames")
     ps.add_argument("--count", type=int, default=0, help="Watch frames to draw (0 = until Ctrl-C)")
