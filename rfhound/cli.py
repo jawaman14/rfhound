@@ -65,6 +65,35 @@ def cmd_doctor(args: argparse.Namespace, cfg: Config) -> int:
     return 0
 
 
+def cmd_device(args: argparse.Namespace, cfg: Config) -> int:
+    if args.device_cmd == "operacake":
+        proc.require_tool("hackrf_operacake")
+        cmd = ["hackrf_operacake"]
+        if args.a:
+            cmd += ["-a", args.a]
+        if args.b:
+            cmd += ["-b", args.b]
+        if not args.a and not args.b:
+            cmd += ["-l"]  # list boards
+        console.info(f"Opera Cake: {proc.format_command(cmd)}")
+        r = proc.run(cmd, check=False, timeout=15)
+        console.print_((r.stdout or "") + (r.stderr or ""))
+        return r.returncode
+    if args.device_cmd == "clock":
+        proc.require_tool("hackrf_clock")
+        r = proc.run(["hackrf_clock", "-r"], check=False, timeout=15)
+        console.print_((r.stdout or "") + (r.stderr or ""))
+        return 0
+    # info
+    try:
+        info = device.get_info()
+        console.print_(info.raw)
+    except RFHoundError as exc:
+        console.warn(str(exc).splitlines()[0])
+        return 1
+    return 0
+
+
 def cmd_setup(args: argparse.Namespace, cfg: Config) -> int:
     """One-time, no-friction setup summary: config, tools, device, next steps."""
     console.banner(__version__)
@@ -384,15 +413,66 @@ def cmd_decode(args: argparse.Namespace, cfg: Config) -> int:
         cmd = decode_mod.run_decoder(recipe, cfg, freq_hz=freq_hz, seconds=args.seconds, dry_run=True)
         console.print_(f"  would run: {cmd[0]}")
         return 0
+    store = None
+    if getattr(args, "track", False):
+        from .modules import sightings
+        store = sightings.SightingsStore()
+
+        def on_line(line):
+            console.print_(line)
+            sightings.ingest_json_line(store, recipe.id, line,
+                                       freq_mhz=freq_hz / 1e6, save=False)
+    else:
+        on_line = console.print_
+
     try:
         lines = decode_mod.run_decoder(
-            recipe, cfg, freq_hz=freq_hz, seconds=args.seconds,
-            on_line=console.print_,
+            recipe, cfg, freq_hz=freq_hz, seconds=args.seconds, on_line=on_line,
         )
     except RFHoundError as exc:
         console.error(str(exc))
         return 1
+    if store is not None:
+        store.save()
+        console.success(f"Tracked {len(store.data)} unique ID(s) — see 'rfhound track list'.")
     console.success(f"Decoder finished ({len(lines)} lines).")
+    return 0
+
+
+def cmd_track(args: argparse.Namespace, cfg: Config) -> int:
+    from .modules import sightings
+    import time
+    store = sightings.SightingsStore()
+    if args.track_cmd == "add":
+        s = store.record(args.kind, args.id, freq_mhz=args.freq, note=args.note or "")
+        console.success(f"Recorded {s.kind}:{s.id} (count {s.count})")
+        return 0
+    if args.track_cmd == "clear":
+        n = store.clear(args.kind)
+        console.success(f"Cleared {n} sighting(s).")
+        return 0
+    if args.track_cmd == "show":
+        matches = [s for s in store.list() if s.id == args.id]
+        if not matches:
+            console.warn(f"No sightings for id '{args.id}'.")
+            return 1
+        for s in matches:
+            console.print_(f"{s.kind}:{s.id}  count={s.count}  "
+                           f"freq={s.freq_mhz or '?'} MHz  note={s.note}")
+            console.print_(f"  first: {time.ctime(s.first_seen)}  last: {time.ctime(s.last_seen)}")
+            if s.extra:
+                console.print_(f"  extra: {s.extra}")
+        return 0
+    # list
+    items = store.list(args.kind)
+    if not items:
+        console.warn("No sightings yet. Decode with --track, or 'rfhound track add <kind> <id>'.")
+        return 0
+    rows = [[s.kind, s.id, str(s.count), f"{s.freq_mhz:.3f}" if s.freq_mhz else "—",
+             time.strftime("%m-%d %H:%M", time.localtime(s.last_seen)),
+             (s.extra.get("model") or s.note or "")] for s in items[:args.top]]
+    console.table(f"Sightings ({len(items)} unique IDs)",
+                  ["Kind", "ID", "Count", "Freq MHz", "Last seen", "Model/note"], rows)
     return 0
 
 
@@ -864,6 +944,15 @@ def build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="command")
 
     sub.add_parser("setup", help="One-time setup summary + next steps").set_defaults(func=cmd_setup)
+
+    pdev = sub.add_parser("device", help="HackRF device: info, Opera Cake switch, clock")
+    devsub = pdev.add_subparsers(dest="device_cmd")
+    devsub.add_parser("info", help="Show hackrf_info output")
+    devop = devsub.add_parser("operacake", help="Control an Opera Cake antenna switch")
+    devop.add_argument("--a", help="Port for primary A (e.g. A0..A3/B0..B3)")
+    devop.add_argument("--b", help="Port for primary B")
+    devsub.add_parser("clock", help="Read clock reference status")
+    pdev.set_defaults(func=cmd_device, device_cmd="info", a=None, b=None)
     sub.add_parser("doctor", help="Check tools, HackRF device and config").set_defaults(func=cmd_doctor)
     sub.add_parser("menu", help="Launch the guided interactive menu").set_defaults(func=cmd_menu)
 
@@ -938,6 +1027,8 @@ def build_parser() -> argparse.ArgumentParser:
     drun.add_argument("recipe", help="Recipe id (see 'decode list')")
     drun.add_argument("--freq", type=float, help="Override frequency (MHz)")
     drun.add_argument("--seconds", type=float, default=30, help="Listen duration (s)")
+    drun.add_argument("--track", action="store_true",
+                      help="Record decoded IDs (ICAO/MMSI/sensor/capcode) to the sightings log")
     drun.add_argument("--dry-run", action="store_true", help="Print the command only")
     pd.set_defaults(func=cmd_decode)
 
@@ -1064,6 +1155,22 @@ def build_parser() -> argparse.ArgumentParser:
     ggen.add_argument("--data-out", help="Preset output file (wav/iq/f32)")
     ggen.add_argument("--quiet", action="store_true", help="Don't print the generated code")
     pg.set_defaults(func=cmd_gnuradio, gr_cmd="list")
+
+    ptr = sub.add_parser("track", help="Track decoded IDs (aircraft/vessel/sensor/pager)")
+    trsub = ptr.add_subparsers(dest="track_cmd")
+    trl = trsub.add_parser("list", help="List tracked sightings")
+    trl.add_argument("--kind", help="Filter by kind (adsb, ais, rtl433, pocsag, cell…)")
+    trl.add_argument("--top", type=int, default=50, help="Show top-N")
+    tra = trsub.add_parser("add", help="Manually record a sighting")
+    tra.add_argument("kind")
+    tra.add_argument("id")
+    tra.add_argument("--freq", type=float, help="Frequency (MHz)")
+    tra.add_argument("--note")
+    trs = trsub.add_parser("show", help="Show details for an id")
+    trs.add_argument("id")
+    trc = trsub.add_parser("clear", help="Clear sightings")
+    trc.add_argument("--kind", help="Only clear this kind")
+    ptr.set_defaults(func=cmd_track, track_cmd="list", kind=None, top=50)
 
     pbm = sub.add_parser("bookmark", help="Save/list frequency bookmarks (memory channels)")
     bmsub = pbm.add_subparsers(dest="bm_cmd")

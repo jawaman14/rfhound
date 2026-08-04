@@ -245,9 +245,10 @@ RECIPES: dict[str, Recipe] = {
     ),
     "noaa_apt": Recipe(
         "noaa_apt", "NOAA APT weather imagery (noaa-apt)", "satellite", "noaa-apt",
-        137_500_000,
+        137_100_000,  # NOAA-19 (others: 137.9125 NOAA-15, 137.620 NOAA-18)
         "Decodes NOAA APT weather-satellite images from a recorded WAV pass.",
-        _noaa_apt, note="Two-step: record the pass, then decode the WAV.",
+        _noaa_apt, note="Two-step: record the pass, then decode the WAV. Freqs: "
+        "137.100 (NOAA-19), 137.9125 (NOAA-15), 137.620 (NOAA-18).",
     ),
     "radiosonde": Recipe(
         "radiosonde", "Weather-balloon radiosondes (auto_rx)", "aviation",

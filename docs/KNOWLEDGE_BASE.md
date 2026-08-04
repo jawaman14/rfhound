@@ -16,6 +16,24 @@ you learn a new signal.
 
 `rfhound at <MHz>` and the dashboard footer show the ITU band you're in.
 
+## 1b. HackRF One hardware capabilities
+
+What the radio can do, and how RFHound uses it:
+
+| Capability | Spec | In RFHound |
+|------------|------|------------|
+| Frequency range | 1 MHz – 6 GHz, half-duplex | all tuning |
+| Sample rate | 2–20 Msps (20 MHz bandwidth) | `sample_rate` in config (default 8) |
+| RX/TX gains | LNA (IF), VGA (BB), +14 dB amp | `lna_gain`/`vga_gain`/`amp_enable` |
+| Bias-tee | 3.3 V / 50 mA on the antenna port | `antenna_power` (for active antennas/LNAs) |
+| Baseband filter | selectable | `baseband_filter_hz` |
+| Clock | onboard 25 MHz **or** external 10 MHz ref (SMA in/out) | `rfhound device clock` |
+| Opera Cake | 8-port antenna switch add-on (1×8 or dual 1×4), by freq/time | `rfhound device operacake` |
+| Max TX power | ~15 dBm (band-dependent) | replay only, gated |
+
+Tools RFHound drives: `hackrf_info`, `hackrf_sweep`, `hackrf_transfer`,
+`hackrf_operacake`, `hackrf_clock` (see `rfhound doctor`).
+
 ## 2. Modulation cheat-sheet (how to tell them apart)
 
 | Modulation | Amplitude | Frequency/Phase | Tell-tale in IQ | Common users |

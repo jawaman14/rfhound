@@ -251,6 +251,13 @@ def _make_handler(state: AppState):
                     return self._send_json(decoders_dict())
                 if path == "/api/bookmarks":
                     return self._send_json({"bookmarks": cfg.bookmarks})
+                if path == "/api/sightings":
+                    from ..modules import sightings as sightings_mod
+                    store = sightings_mod.SightingsStore()
+                    return self._send_json({"sightings": [
+                        {"kind": s.kind, "id": s.id, "count": s.count,
+                         "freq_mhz": s.freq_mhz, "last_seen": s.last_seen}
+                        for s in store.list()[:200]]})
                 if path == "/api/sweep":
                     start = float(qs.get("start", ["430"])[0])
                     stop = float(qs.get("stop", ["440"])[0])

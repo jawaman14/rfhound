@@ -43,6 +43,16 @@ KNOWN_TOOLS: dict[str, Tool] = {
         "Raw IQ record and replay",
         "apt install hackrf",
     ),
+    "hackrf_operacake": Tool(
+        "hackrf_operacake",
+        "Control an Opera Cake antenna-switch add-on (1x8 / dual 1x4)",
+        "apt install hackrf   (Opera Cake board required)",
+    ),
+    "hackrf_clock": Tool(
+        "hackrf_clock",
+        "Query/configure the clock (onboard 25 MHz or external 10 MHz ref)",
+        "apt install hackrf",
+    ),
     "rtl_433": Tool(
         "rtl_433",
         "Decode 300-928 MHz ISM devices (TPMS, weather, sensors, fobs)",

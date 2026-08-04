@@ -27,7 +27,7 @@ To run one: `rfhound decode run <id> [--freq MHz] [--seconds N]`
 | `pocsag` | POCSAG pagers | paging | 929.000 | `multimon-ng` | POCSAG pager messages (often unencrypted) |
 | `flex` | FLEX pagers | paging | 929.000 | `multimon-ng` | FLEX pager messages (often unencrypted) |
 | `satdump` | Satellites & imagery | satellite | 137.100 | `satdump` | Many weather/L-band satellites → imagery |
-| `noaa_apt` | NOAA APT weather imagery | satellite | 137.500 | `noaa-apt` | NOAA APT images from a recorded WAV pass |
+| `noaa_apt` | NOAA APT weather imagery | satellite | 137.100 | `noaa-apt` | NOAA APT images (137.100 NOAA-19 / 137.9125 NOAA-15 / 137.620 NOAA-18) |
 | `iridium` | Iridium bursts | satellite | 1621.250 | `iridium-extractor` | L-band bursts for iridium-toolkit |
 | `tetra` | TETRA trunked radio | voice | 395.000 | `tetra-rx` | Unencrypted TETRA control/voice |
 | `dsd` | Digital voice DMR/P25/NXDN | voice | 450.000 | `dsd` | Unencrypted DMR/P25/NXDN/D-STAR voice |
@@ -56,3 +56,19 @@ rfhound sweep 430 440 --identify         # auto-identify every peak in a sweep
 
 The web dashboard's peak table shows the same **Bandwidth · Likely signal ·
 Decoder** columns automatically. See [HELP.md](HELP.md) for all options.
+
+## Track decoded IDs
+
+Add `--track` to a decode run and RFHound logs the identifiers it sees (aircraft
+ICAO, vessel MMSI, rtl_433 sensor/TPMS id, pager capcode) with first/last-seen
+and a count:
+
+```bash
+rfhound decode run rtl433 --track        # record sensor/TPMS ids as they arrive
+rfhound track list                       # see everything tracked
+rfhound track show 3a1b                  # details for one id
+rfhound track add adsb 4ca7b3 --freq 1090
+```
+
+Sightings persist in `~/.config/rfhound/sightings.json` and are exposed at
+`/api/sightings`. It's a receive log only — no external lookups.
