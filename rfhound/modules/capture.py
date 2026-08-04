@@ -26,7 +26,8 @@ class Capture:
     num_samples: int
 
 
-def _write_sigmf(meta_path: Path, freq_hz: int, sample_rate: int, note: str) -> None:
+def _write_sigmf(meta_path: Path, freq_hz: int, sample_rate: int, note: str,
+                 num_samples: int = 0) -> None:
     """Write a minimal SigMF-compatible metadata file.
 
     HackRF's -r output is interleaved signed 8-bit IQ => SigMF datatype "ci8".
@@ -41,6 +42,7 @@ def _write_sigmf(meta_path: Path, freq_hz: int, sample_rate: int, note: str) -> 
             "core:description": note or (band.name if band else "RFHound capture"),
             "rfhound:band": band.name if band else None,
             "rfhound:category": band.category if band else None,
+            "rfhound:num_samples": num_samples,
         },
         "captures": [
             {
@@ -93,7 +95,7 @@ def capture_iq(
         args += proc.hackrf_common_args(cfg)
         proc.run(args, timeout=seconds + 30)
 
-    _write_sigmf(meta_path, freq_hz, sr, note)
+    _write_sigmf(meta_path, freq_hz, sr, note, num_samples=num_samples)
     return Capture(
         data_path=data_path,
         meta_path=meta_path,

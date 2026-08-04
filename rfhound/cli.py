@@ -378,7 +378,54 @@ def cmd_capture(args: argparse.Namespace, cfg: Config) -> int:
     console.success(f"Captured {cap.seconds}s @ {cap.freq_hz/1e6:.3f} MHz")
     console.print_(f"  data: {cap.data_path}")
     console.print_(f"  meta: {cap.meta_path}")
-    console.print_("  Open in URH / inspectrum / GNU Radio for analysis.")
+    if getattr(args, "classify", False):
+        from .modules import recordings
+        try:
+            r = recordings.classify_recording(cap.data_path, cfg)
+            console.success(f"Classified: {r.guess} ({r.guess_confidence}%) · "
+                            f"{r.modulation} · ~{r.bandwidth_khz} kHz"
+                            + (f" · decoder {r.decoder}" if r.decoder else ""))
+        except (RuntimeError, OSError) as exc:
+            console.warn(f"Classify skipped: {exc}")
+    console.print_("  Open in URH / inspectrum / GNU Radio, or 'rfhound recordings list'.")
+    return 0
+
+
+def cmd_recordings(args: argparse.Namespace, cfg: Config) -> int:
+    from .modules import recordings
+    if args.rec_cmd == "show":
+        rec = recordings.find_recording(cfg.output_dir, args.name)
+        if not rec:
+            console.error(f"No recording named '{args.name}' in {cfg.output_dir}")
+            return 1
+        import json
+        console.print_(json.dumps(recordings._read_meta(rec.meta_path), indent=2))
+        return 0
+    if args.rec_cmd == "classify":
+        rec = recordings.find_recording(cfg.output_dir, args.name)
+        if not rec:
+            console.error(f"No recording named '{args.name}'.")
+            return 1
+        try:
+            r = recordings.classify_recording(rec.data_path, cfg)
+        except (RuntimeError, OSError) as exc:
+            console.error(str(exc))
+            return 2
+        console.success(f"{rec.name}: {r.guess} ({r.guess_confidence}%) · {r.modulation} · "
+                        f"~{r.bandwidth_khz} kHz · decoder {r.decoder or '—'}")
+        return 0
+    # list
+    recs = recordings.list_recordings(cfg.output_dir)
+    if not recs:
+        console.warn(f"No recordings in {cfg.output_dir}. Make one: rfhound capture <MHz> <sec>")
+        return 0
+    rows = [[r.name, f"{r.freq_mhz:.3f}" if r.freq_mhz else "—",
+             f"{r.seconds}s" if r.seconds else "—",
+             f"{r.guess} ({r.guess_confidence}%)" if r.guess else "unclassified",
+             r.modulation or "—", r.decoder or "—"] for r in recs]
+    console.table(f"Recordings in {cfg.output_dir}",
+                  ["Name", "Freq MHz", "Length", "Likely signal", "Mod", "Decoder"], rows)
+    console.print_("\nClassify one:  rfhound recordings classify <name>")
     return 0
 
 
@@ -478,6 +525,19 @@ def cmd_track(args: argparse.Namespace, cfg: Config) -> int:
 
 def cmd_replay(args: argparse.Namespace, cfg: Config) -> int:
     data_path = Path(args.file)
+    # Surface any stored classification so the operator knows what's being replayed.
+    meta_path = data_path.with_suffix(".sigmf-meta")
+    if meta_path.exists():
+        import json
+        try:
+            g = json.loads(meta_path.read_text()).get("global", {})
+            if g.get("rfhound:guess"):
+                console.info(f"This recording looks like: {g['rfhound:guess']} "
+                             f"({g.get('rfhound:guess_confidence', '?')}%) · "
+                             f"{g.get('rfhound:modulation', '?')} · decoder "
+                             f"{g.get('rfhound:suggested_decoder') or '—'}")
+        except (json.JSONDecodeError, OSError):
+            pass
     try:
         plan = replay_mod.replay(
             cfg,
@@ -1078,8 +1138,19 @@ def build_parser() -> argparse.ArgumentParser:
     pc.add_argument("--name", help="Base filename")
     pc.add_argument("--rate", type=int, help="Sample rate (Hz)")
     pc.add_argument("--note", help="Free-text note stored in metadata")
+    pc.add_argument("--classify", action="store_true",
+                    help="Analyze the capture and store bandwidth/modulation/decoder in metadata")
     pc.add_argument("--simulate", action="store_true", help="Write placeholder (no hardware)")
     pc.set_defaults(func=cmd_capture)
+
+    prec = sub.add_parser("recordings", help="Catalog captures + their classification/decode settings")
+    recsub = prec.add_subparsers(dest="rec_cmd")
+    recsub.add_parser("list", help="List recordings with classification")
+    recshow = recsub.add_parser("show", help="Show a recording's full metadata")
+    recshow.add_argument("name")
+    reccl = recsub.add_parser("classify", help="Classify a recording and store the result")
+    reccl.add_argument("name")
+    prec.set_defaults(func=cmd_recordings, rec_cmd="list", name=None)
 
     pd = sub.add_parser("decode", help="Protocol decoders (rtl_433, ADS-B, pagers, AIS...)")
     dsub = pd.add_subparsers(dest="decode_cmd", required=True)

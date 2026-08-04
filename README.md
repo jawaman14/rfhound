@@ -1,7 +1,7 @@
 # RFHound 🐕‍🦺📡
 
 **A friendly, powerful HackRF reconnaissance & RF situational-awareness toolkit.**
-_Version 1.0 · receive-first · 172 tests · MIT._
+_Version 1.0 · receive-first · 184 tests · MIT._
 
 RFHound turns a wall of raw spectrum into *"oh, that's a tire-pressure sensor"*.
 It is an **orchestration layer** — it does not re-implement DSP. Instead it
@@ -172,6 +172,7 @@ ACARS/APRS, NOAA weather-satellite imagery, GPS L1 (receive-only), and the busy
 - [`docs/COPILOT.md`](docs/COPILOT.md) — drive RFHound with Claude / a local LLM (receive-only, safe)
 - [`docs/MULTINODE.md`](docs/MULTINODE.md) — link multiple receivers/operators into one hub
 - [`docs/AUTOMATION.md`](docs/AUTOMATION.md) — scheduled/looping RF tasks with triggers and alerting
+- [`docs/RECORDINGS.md`](docs/RECORDINGS.md) — captures that store their classification + decode settings
 - [`docs/FREQUENCIES.md`](docs/FREQUENCIES.md) — the frequency knowledge base
 - [`docs/MODDING.md`](docs/MODDING.md) — extend RFHound with your own bands/decoders/detectors
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — how it's built and how to extend it
