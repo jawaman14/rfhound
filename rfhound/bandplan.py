@@ -176,6 +176,44 @@ CATEGORIES: dict[str, str] = {
 }
 
 
+# ITU frequency-band designations (the "what range am I in?" chart).
+ITU_BANDS: list[tuple[str, str, int, int]] = [
+    ("VLF", "Very Low Frequency", 3_000, 30_000),
+    ("LF", "Low Frequency", 30_000, 300_000),
+    ("MF", "Medium Frequency", 300_000, 3_000_000),
+    ("HF", "High Frequency", 3_000_000, 30_000_000),
+    ("VHF", "Very High Frequency", 30_000_000, 300_000_000),
+    ("UHF", "Ultra High Frequency", 300_000_000, 3_000_000_000),
+    ("SHF", "Super High Frequency (microwave)", 3_000_000_000, 30_000_000_000),
+    ("EHF", "Extremely High Frequency (mmWave)", 30_000_000_000, 300_000_000_000),
+]
+
+
+def itu_band(freq_hz: int) -> tuple[str, str, int, int] | None:
+    """Return the ITU band designation (abbr, name, low_hz, high_hz) for a freq."""
+    for abbr, name, lo, hi in ITU_BANDS:
+        if lo <= freq_hz < hi:
+            return (abbr, name, lo, hi)
+    return None
+
+
+def itu_label(freq_hz: int) -> str:
+    """Short human label, e.g. 'UHF (300 MHz–3 GHz)'."""
+    b = itu_band(freq_hz)
+    if not b:
+        return "—"
+    _, _, lo, hi = b
+
+    def fmt(h):
+        if h >= 1e9:
+            return f"{h/1e9:.0f} GHz"
+        if h >= 1e6:
+            return f"{h/1e6:.0f} MHz"
+        return f"{h/1e3:.0f} kHz"
+
+    return f"{b[0]} ({fmt(lo)}–{fmt(hi)})"
+
+
 def find_band(freq_hz: int) -> Band | None:
     """Return the most specific band containing *freq_hz*, if any.
 

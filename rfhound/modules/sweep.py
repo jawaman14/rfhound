@@ -202,6 +202,7 @@ def render_spectrum(result: SweepResult, width: int = 60, rows: int = 12) -> Non
     pmin, pmax = min(finite), max(finite)
     prange = max(1.0, pmax - pmin)
     blocks = " .:-=+*#%@"
+    mid = (lo + hi) // 2
     console.print_(
         f"Spectrum {lo/1e6:.1f}-{hi/1e6:.1f} MHz  "
         f"floor {result.noise_floor_db} dB  peak {pmax:.0f} dB"
@@ -213,3 +214,4 @@ def render_spectrum(result: SweepResult, width: int = 60, rows: int = 12) -> Non
         for c in cols
     )
     console.print_(f"[{line}]")
+    console.print_(f" ITU range: {bandplan.itu_label(mid)}")

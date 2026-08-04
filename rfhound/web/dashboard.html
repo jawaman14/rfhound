@@ -201,6 +201,7 @@ function drawSpectrum(d){
   ctx.strokeStyle='#38e0c8';ctx.lineWidth=1.6;ctx.stroke();
   ctx.fillStyle='#8595a8';ctx.font='11px system-ui';
   ctx.fillText(d.start_mhz.toFixed(1)+' MHz',5,h-5);ctx.fillText(d.stop_mhz.toFixed(1)+' MHz',w-72,h-5);
+  if(d.itu_label){ctx.fillStyle='#38e0c8';ctx.textAlign='center';ctx.fillText('▬ '+d.itu_label+' ▬',w/2,h-5);ctx.textAlign='left';}
   wfRows.unshift(s.map(v=>(v-min)/rng));if(wfRows.length>wfCv.height)wfRows.pop();drawWaterfall();
 }
 function drawWaterfall(){

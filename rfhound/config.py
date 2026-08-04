@@ -75,6 +75,9 @@ class Config:
     llm_model: str = ""       # e.g. "claude-..." or a local model name
     llm_base_url: str = ""    # local/OpenAI-compatible endpoint base URL
 
+    # Saved frequency bookmarks / memory channels: [{name, freq_mhz, note}].
+    bookmarks: list = field(default_factory=list)
+
     # --- Multi-node linking -------------------------------------------------
     hub_url: str = ""         # aggregator this node reports to
     node_id: str = ""         # this node's identity in a sensor mesh

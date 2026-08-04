@@ -87,9 +87,12 @@ def sweep_dict(cfg: Config, start_mhz: float, stop_mhz: float, *,
     finite = [c for c in cols if c is not None]
     floor = result.noise_floor_db
     spectrum = [floor if c is None else round(c, 1) for c in cols]
+    itu = bandplan.itu_band((lo + hi) // 2)
     return {
         "start_mhz": lo / 1e6,
         "stop_mhz": hi / 1e6,
+        "itu_band": itu[0] if itu else None,
+        "itu_label": bandplan.itu_label((lo + hi) // 2),
         "noise_floor_db": floor,
         "min_db": round(min(finite), 1) if finite else floor,
         "max_db": round(max(finite), 1) if finite else floor,
@@ -246,6 +249,8 @@ def _make_handler(state: AppState):
                     return self._send_json({"bands": [_band_dict(b) for b in bandplan.BANDS]})
                 if path == "/api/decoders":
                     return self._send_json(decoders_dict())
+                if path == "/api/bookmarks":
+                    return self._send_json({"bookmarks": cfg.bookmarks})
                 if path == "/api/sweep":
                     start = float(qs.get("start", ["430"])[0])
                     stop = float(qs.get("stop", ["440"])[0])

@@ -124,18 +124,38 @@ def cmd_bands(args: argparse.Namespace, cfg: Config) -> int:
 
 
 def cmd_classify(args: argparse.Namespace, cfg: Config) -> int:
-    matches = classify_mod.classify(args.freq, bandwidth_khz=args.bw, modulation=args.mod)
+    freq, bw, mod = args.freq, args.bw, args.mod
+    if args.file:
+        from .modules import iqtools
+        try:
+            a = iqtools.analyze(Path(args.file))
+        except (RuntimeError, OSError) as exc:
+            console.error(str(exc))
+            return 2
+        bw = a.bandwidth_khz
+        mod = a.modulation.modulation
+        if freq is None and a.center_mhz is not None:
+            freq = a.center_mhz
+        console.info(f"IQ analysis of {Path(args.file).name}: "
+                     f"center {a.center_mhz or '?'} MHz · {a.sample_rate/1e6:.1f} MSPS")
+        console.print_(f"  measured bandwidth: {bw} kHz  ·  modulation: {mod} "
+                       f"({a.modulation.confidence}% · {a.modulation.continuity}, "
+                       f"SNR {a.modulation.snr_db:.0f} dB)")
+    if freq is None:
+        console.error("Provide a frequency (MHz) or --file with a capture that has metadata.")
+        return 1
+    matches = classify_mod.classify(freq, bandwidth_khz=bw, modulation=mod)
     if args.json:
         import json
         console.print_(json.dumps([{
             "name": m.name, "likelihood": m.likelihood, "decoder": m.decoder,
             "category": m.category, "reasons": m.reasons} for m in matches], indent=2))
         return 0
-    ctx = f"{args.freq} MHz"
-    if args.bw:
-        ctx += f", ~{args.bw} kHz"
-    if args.mod:
-        ctx += f", {args.mod}"
+    ctx = f"{freq} MHz · {bandplan.itu_label(int(freq * 1e6))}"
+    if bw:
+        ctx += f", ~{bw:.0f} kHz"
+    if mod:
+        ctx += f", {mod}"
     rows = [[f"{m.likelihood}%", m.name, m.decoder or "—", m.category] for m in matches[:8]]
     console.table(f"Signal match — {ctx}", ["Likelihood", "Likely signal", "Decoder", "Category"], rows)
     top = matches[0]
@@ -143,8 +163,8 @@ def cmd_classify(args: argparse.Namespace, cfg: Config) -> int:
                    if console.have_rich() else f"\nBest guess: {top.name} ({top.likelihood}%)")
     console.print_("  why: " + "; ".join(top.reasons))
     if top.decoder:
-        console.print_(f"  try: rfhound decode run {top.decoder} --freq {args.freq}")
-    console.print_(f"  more: rfhound at {args.freq}")
+        console.print_(f"  try: rfhound decode run {top.decoder} --freq {freq}")
+    console.print_(f"  more: rfhound at {freq}")
     return 0
 
 
@@ -163,8 +183,10 @@ def cmd_at(args: argparse.Namespace, cfg: Config) -> int:
             "gnuradio": tb.gnuradio, "commands": tb.commands}, indent=2))
         return 0
     b = tb.band
+    itu = bandplan.itu_label(int(args.freq * 1e6))
     console.panel(
-        f"{b.name}   ({b.low_hz/1e6:.3f}–{b.high_hz/1e6:.3f} MHz · {b.category} · {b.region})\n\n"
+        f"{b.name}   ({b.low_hz/1e6:.3f}–{b.high_hz/1e6:.3f} MHz · {b.category} · {b.region})\n"
+        f"ITU range: {itu}\n\n"
         f"{b.description}",
         title=f"You are at {args.freq} MHz", style="cyan")
     console.rule("Decoders for this band")
@@ -767,6 +789,34 @@ def cmd_node(args: argparse.Namespace, cfg: Config) -> int:
     return 0
 
 
+def cmd_bookmark(args: argparse.Namespace, cfg: Config) -> int:
+    if args.bm_cmd == "add":
+        cfg.bookmarks = [b for b in cfg.bookmarks if b.get("name") != args.name]
+        cfg.bookmarks.append({"name": args.name, "freq_mhz": args.freq,
+                              "note": args.note or ""})
+        save_config(cfg)
+        console.success(f"Bookmarked '{args.name}' at {args.freq} MHz")
+        return 0
+    if args.bm_cmd == "remove":
+        before = len(cfg.bookmarks)
+        cfg.bookmarks = [b for b in cfg.bookmarks if b.get("name") != args.name]
+        save_config(cfg)
+        console.success(f"Removed '{args.name}'" if len(cfg.bookmarks) < before
+                        else f"No bookmark named '{args.name}'")
+        return 0
+    # list
+    if not cfg.bookmarks:
+        console.warn("No bookmarks yet. Add one: rfhound bookmark add <name> <MHz>")
+        return 0
+    rows = []
+    for b in sorted(cfg.bookmarks, key=lambda x: x.get("freq_mhz", 0)):
+        f = b.get("freq_mhz", 0)
+        itu = bandplan.itu_band(int(f * 1e6))
+        rows.append([b.get("name", ""), f"{f:.4f}", itu[0] if itu else "—", b.get("note", "")])
+    console.table("Bookmarks / memory channels", ["Name", "Freq (MHz)", "ITU", "Note"], rows)
+    return 0
+
+
 def cmd_config(args: argparse.Namespace, cfg: Config) -> int:
     if args.config_cmd == "path":
         console.print_(str(config_path()))
@@ -829,9 +879,10 @@ def build_parser() -> argparse.ArgumentParser:
     ptu.set_defaults(func=cmd_tune)
 
     pcl = sub.add_parser("classify", help="Guess a signal's type + likelihood from its characteristics")
-    pcl.add_argument("freq", type=float, help="Center frequency (MHz)")
+    pcl.add_argument("freq", type=float, nargs="?", help="Center frequency (MHz)")
     pcl.add_argument("--bw", type=float, help="Occupied bandwidth (kHz), if known")
     pcl.add_argument("--mod", help="Modulation hint: ook, fsk, gfsk, fm, am, ofdm, gmsk, pulse…")
+    pcl.add_argument("--file", help="Analyze an IQ capture (.sigmf-data) for real bw + modulation")
     pcl.add_argument("--json", action="store_true", help="Machine-readable output")
     pcl.set_defaults(func=cmd_classify)
 
@@ -1000,6 +1051,17 @@ def build_parser() -> argparse.ArgumentParser:
     ggen.add_argument("--data-out", help="Preset output file (wav/iq/f32)")
     ggen.add_argument("--quiet", action="store_true", help="Don't print the generated code")
     pg.set_defaults(func=cmd_gnuradio, gr_cmd="list")
+
+    pbm = sub.add_parser("bookmark", help="Save/list frequency bookmarks (memory channels)")
+    bmsub = pbm.add_subparsers(dest="bm_cmd")
+    bmadd = bmsub.add_parser("add", help="Save a frequency")
+    bmadd.add_argument("name")
+    bmadd.add_argument("freq", type=float, help="Frequency (MHz)")
+    bmadd.add_argument("--note", help="Optional note")
+    bmsub.add_parser("list", help="List bookmarks")
+    bmrm = bmsub.add_parser("remove", help="Remove a bookmark by name")
+    bmrm.add_argument("name")
+    pbm.set_defaults(func=cmd_bookmark, bm_cmd="list")
 
     pm = sub.add_parser("mods", help="Manage extension mods/plugins")
     msub = pm.add_subparsers(dest="mods_cmd")

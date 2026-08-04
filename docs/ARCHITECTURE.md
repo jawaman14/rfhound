@@ -41,6 +41,7 @@ rfhound/
 │       ├── cellular.py # rogue base station / IMSI-catcher detection
 │       ├── toolbox.py # frequency→tools ('at') and protocol→frequency ('tune')
 │       ├── classify.py # signal auto-matching: guess type + confidence
+│       ├── iqtools.py  # IQ capture analysis: real bandwidth + modulation (numpy)
 │       └── report.py  # Markdown / HTML reporting
 └── tests/             # pytest suite (runs with no hardware)
 ```

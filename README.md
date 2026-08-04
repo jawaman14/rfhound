@@ -43,6 +43,8 @@ the law. That's RFHound.
 | Know what's on a frequency + every tool for it | `rfhound at 433.92` — band ID + decoders + detectors + commands |
 | Find the frequency for a protocol | `rfhound tune adsb` → 1090 MHz |
 | Guess what an unknown signal is | `rfhound classify 1090 --bw 1500` → ADS-B (92%) |
+| Measure a recorded capture | `rfhound classify --file capture.sigmf-data` (bandwidth + modulation) |
+| Save frequencies | `rfhound bookmark add myfob 433.92` |
 | See what's transmitting around you | `rfhound recon` — auto-sweeps high-value bands and reports hits |
 | Look at a specific slice of spectrum | `rfhound sweep 433 435` — terminal spectrogram + peak detection |
 | Know what a frequency *is* | `rfhound bands --search tpms` — curated knowledge base |
@@ -163,6 +165,8 @@ ACARS/APRS, NOAA weather-satellite imagery, GPS L1 (receive-only), and the busy
 - [`docs/LEGAL.md`](docs/LEGAL.md) — **read this first**; law, ethics, and what's excluded
 - [`docs/USAGE.md`](docs/USAGE.md) — install the decoders, recipes, workflows
 - [`docs/DECODERS.md`](docs/DECODERS.md) — the full decoder list + the signal auto-classifier
+- [`docs/KNOWLEDGE_BASE.md`](docs/KNOWLEDGE_BASE.md) — RF reference: ITU bands, modulations, signal-ID workflow
+- [`docs/REFERENCES.md`](docs/REFERENCES.md) — curated handbooks, guides, and tool links
 - [`docs/DEFENSE.md`](docs/DEFENSE.md) — detection & hardening: jamming, replay, spoofing, TSCM, C-UAS, hop-detect, response playbooks
 - [`docs/GNURADIO.md`](docs/GNURADIO.md) — prebuilt GNU Radio receive/analysis flowgraph presets
 - [`docs/COPILOT.md`](docs/COPILOT.md) — drive RFHound with Claude / a local LLM (receive-only, safe)
