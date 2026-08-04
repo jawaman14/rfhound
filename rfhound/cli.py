@@ -869,6 +869,62 @@ def cmd_node(args: argparse.Namespace, cfg: Config) -> int:
     return 0
 
 
+def cmd_automate(args: argparse.Namespace, cfg: Config) -> int:
+    from .modules import automation as auto_mod
+    sim = args.simulate or cfg.simulate_mode or not device.is_present()
+    sub = args.automate_cmd
+    if sub in (None, "menu"):
+        from .automation_menu import run_automation_menu
+        return run_automation_menu(cfg)
+    if sub == "list":
+        if not cfg.automations:
+            console.warn("No automations. Add one: rfhound automate add <name> <task>")
+            return 0
+        rows = []
+        for a in cfg.automations:
+            n = auto_mod._norm(a)
+            rows.append([n["name"], n["task"], f"{n['interval_s']}s", n["alert_on"],
+                         "on" if n["enabled"] else "off",
+                         " ".join(f"{k}={v}" for k, v in n["params"].items()) or "—"])
+        console.table("Automations", ["Name", "Task", "Every", "Alert", "On", "Params"], rows)
+        return 0
+    if sub == "add":
+        params = {}
+        if args.start is not None:
+            params["start"] = args.start
+        if args.stop is not None:
+            params["stop"] = args.stop
+        auto_mod.add_automation(cfg, args.name, args.task, interval_s=args.interval,
+                                params=params, alert_on=args.alert_on, webhook=args.webhook or "")
+        console.success(f"Added automation '{args.name}' ({args.task}, every {args.interval}s).")
+        return 0
+    if sub == "remove":
+        ok = auto_mod.remove_automation(cfg, args.name)
+        console.success(f"Removed '{args.name}'." if ok else f"No automation '{args.name}'.")
+        return 0
+    if sub in ("enable", "disable"):
+        ok = auto_mod.set_enabled(cfg, args.name, sub == "enable")
+        console.success(f"'{args.name}' {sub}d." if ok else f"No automation '{args.name}'.")
+        return 0
+    if sub == "once":
+        autos = [a for a in cfg.automations if not args.name or a.get("name") == args.name]
+        if not autos:
+            console.warn("No matching automation.")
+            return 1
+        for a in autos:
+            res = auto_mod.run_task(cfg, a, simulate=sim)
+            alerting = auto_mod.should_alert(a, res)
+            auto_mod.fire(cfg, a, res, alerting=alerting)
+            (console.error if alerting else console.success)(
+                f"{auto_mod._norm(a)['name']} · {'ALERT' if alerting else 'ok'}: {res.summary}")
+        return 0
+    if sub == "run":
+        auto_mod.run_scheduler(cfg, simulate=sim)
+        return 0
+    console.error("Unknown automate subcommand.")
+    return 1
+
+
 def cmd_bookmark(args: argparse.Namespace, cfg: Config) -> int:
     if args.bm_cmd == "add":
         cfg.bookmarks = [b for b in cfg.bookmarks if b.get("name") != args.name]
@@ -1155,6 +1211,32 @@ def build_parser() -> argparse.ArgumentParser:
     ggen.add_argument("--data-out", help="Preset output file (wav/iq/f32)")
     ggen.add_argument("--quiet", action="store_true", help="Don't print the generated code")
     pg.set_defaults(func=cmd_gnuradio, gr_cmd="list")
+
+    pau = sub.add_parser("automate", help="Automation: scheduled/looping RF tasks with alerting")
+    ausub = pau.add_subparsers(dest="automate_cmd")
+    ausub.add_parser("menu", help="Interactive automation menu")
+    ausub.add_parser("list", help="List automations")
+    auadd = ausub.add_parser("add", help="Define an automation")
+    auadd.add_argument("name")
+    auadd.add_argument("task", choices=["recon", "monitor", "drone", "imsi", "hop", "sweep"])
+    auadd.add_argument("--interval", type=int, default=60, help="Run every N seconds")
+    auadd.add_argument("--start", type=float, help="Start MHz (monitor/sweep)")
+    auadd.add_argument("--stop", type=float, help="Stop MHz (monitor/sweep)")
+    auadd.add_argument("--alert-on", dest="alert_on", default="threat",
+                       choices=["threat", "always", "change"])
+    auadd.add_argument("--webhook", help="POST alerts to this URL")
+    aurm = ausub.add_parser("remove", help="Delete an automation")
+    aurm.add_argument("name")
+    auen = ausub.add_parser("enable", help="Enable an automation")
+    auen.add_argument("name")
+    audi = ausub.add_parser("disable", help="Disable an automation")
+    audi.add_argument("name")
+    auon = ausub.add_parser("once", help="Run an automation (or all) once now")
+    auon.add_argument("name", nargs="?")
+    auon.add_argument("--simulate", action="store_true")
+    aur = ausub.add_parser("run", help="Run the scheduler loop (Ctrl-C to stop)")
+    aur.add_argument("--simulate", action="store_true")
+    pau.set_defaults(func=cmd_automate, automate_cmd=None, simulate=False, name=None)
 
     ptr = sub.add_parser("track", help="Track decoded IDs (aircraft/vessel/sensor/pager)")
     trsub = ptr.add_subparsers(dest="track_cmd")

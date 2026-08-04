@@ -78,6 +78,9 @@ class Config:
     # Saved frequency bookmarks / memory channels: [{name, freq_mhz, note}].
     bookmarks: list = field(default_factory=list)
 
+    # Automations: [{name, task, interval_s, params, alert_on, webhook, enabled}].
+    automations: list = field(default_factory=list)
+
     # --- Multi-node linking -------------------------------------------------
     hub_url: str = ""         # aggregator this node reports to
     node_id: str = ""         # this node's identity in a sensor mesh
