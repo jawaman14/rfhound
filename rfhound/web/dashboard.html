@@ -217,7 +217,11 @@ async function doSweep(){
     $('#sweepInfo').textContent=`floor ${d.noise_floor_db} dB · ${d.peaks.length} peaks`+(d.simulated?' · SIMULATED':'');
     const tb=$('#peaks tbody');tb.innerHTML='';
     d.peaks.forEach(p=>tb.insertAdjacentHTML('beforeend',
-      `<tr><td>${p.freq_mhz.toFixed(4)}</td><td>${p.power_db}</td><td>${p.bandwidth_khz?p.bandwidth_khz.toFixed(0)+' kHz':'—'}</td><td>${p.guess||p.band||'—'} ${p.confidence?`<span class="muted">${p.confidence}%</span>`:''}</td><td>${p.decoder?`<span class="tag">${p.decoder}</span>`:'—'}</td></tr>`));
+      `<tr style="cursor:pointer" title="Click to inspect this frequency" data-f="${p.freq_mhz.toFixed(4)}"><td>${p.freq_mhz.toFixed(4)}</td><td>${p.power_db}</td><td>${p.bandwidth_khz?p.bandwidth_khz.toFixed(0)+' kHz':'—'}</td><td>${p.guess||p.band||'—'} ${p.confidence?`<span class="muted">${p.confidence}%</span>`:''}</td><td>${p.decoder?`<span class="tag">${p.decoder}</span>`:'—'}</td></tr>`));
+    tb.querySelectorAll('tr[data-f]').forEach(tr=>tr.onclick=()=>{
+      $('#atFreq').value=tr.dataset.f; doAt();
+      document.getElementById('bands').scrollIntoView({behavior:'smooth',block:'center'});
+    });
   }catch(e){$('#sweepInfo').textContent='error: '+e.message;}
 }
 async function doRecon(){

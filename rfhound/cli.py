@@ -842,7 +842,20 @@ def cmd_menu(args: argparse.Namespace, cfg: Config) -> int:
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="rfhound",
-        description="HackRF reconnaissance & pentesting toolkit (receive-first).",
+        description="HackRF reconnaissance & RF situational-awareness toolkit (receive-first).",
+        epilog=(
+            "quick start:\n"
+            "  rfhound                      guided menu (run with no args)\n"
+            "  rfhound setup                one-time setup summary\n"
+            "  rfhound --simulate recon     try it with no hardware\n"
+            "  rfhound at 433.92            what's here + every tool for it\n"
+            "  rfhound tune adsb            what frequency do I need?\n"
+            "  rfhound sweep 430 440 --identify   auto-identify signals\n"
+            "  rfhound defense respond jamming    a threat's response playbook\n"
+            "  rfhound web --open           browser dashboard + REST API\n"
+            "\nfull reference: docs/HELP.md  ·  tutorial: docs/TUTORIAL.md"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     p.add_argument("--version", action="version", version=f"rfhound {__version__}")
     p.add_argument("--dev", action="store_true", help="Developer mode: verbose debug + tracebacks")
