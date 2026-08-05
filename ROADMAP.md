@@ -1,10 +1,12 @@
 # RFHound roadmap
 
-A living plan for the project — where it is, how it got here, and where it's
-going. This is the working reference I (and any contributor) steer by. It is
-intentionally opinionated about scope.
+A living, detailed plan — where the project is, how it got here, and where it's
+going. This is the reference I (and any contributor) steer by; it is
+intentionally opinionated about scope. It's research-informed: the threat items
+trace back to [`docs/THREATS.md`](docs/THREATS.md), and the SIGINT/DF items to the
+references at the end.
 
-_Last updated: post-v1.0, at 197 tests._
+_Last updated: post-v1.1.0, at 207 tests._
 
 ---
 
@@ -26,138 +28,176 @@ respond"* without stitching tools together by hand.
    / identify / locate) and Electronic **Protection** (recognise jamming/spoofing
    to defend). It never implements Electronic **Attack** — no jamming, spoofing,
    deception, RollJam, brute-force, IMSI-catcher, arbitrary/customizable
-   transmitters, or active countermeasures. This boundary is enforced by tests
-   and must stay that way.
+   transmitters, or active countermeasures. Enforced by tests; must stay that way.
 3. **Runs without hardware.** Every scan supports `--simulate`; the suite runs
-   green with no HackRF.
+   green with no HackRF, and every new capability ships a simulator.
 4. **Honest.** Never fake a decode/measurement. If a tool is missing, say so.
 5. **Light core.** Only `rich` is a hard dependency; `numpy` is optional
-   (`rfhound[iq]`). Keep it that way — add heavy deps only as extras.
+   (`rfhound[iq]`). Heavy deps only as extras.
 
 ---
 
-## Current state (v1.0.0)
+## The SIGINT capability model (the intelligence cycle)
 
-Shipped and tested (197 tests, flake8-clean, MIT, standalone repo):
+RFHound is organised, implicitly, around the classic intelligence cycle. Naming
+the stages shows what's built and what's missing. SIGINT = COMINT (comms) +
+ELINT (non-comms/radar) + FISINT (telemetry); RFHound touches all three on the
+**collection/analysis** side.
 
-- **Orientation:** band plan (1 MHz–6 GHz) + ITU designations, `at` (freq→tools),
-  `tune` (protocol→freq), knowledge base, bookmarks.
-- **Spectrum:** sweep + peak detection + `--identify`, recon survey, live
-  `--watch`, web dashboard (spectrum + waterfall + S-meter + threat KPIs +
-  bookmarks + click-to-tune) + REST API.
-- **Signal ID:** heuristic classifier (freq/bandwidth/modulation), IQ analysis
-  (`iqtools`: measured bandwidth + modulation detection), recordings catalog
-  (captures that store their classification + decode settings).
-- **Decoders:** ~19 receive-only recipes; `decode run --track`.
-- **Detection (EP):** jamming/interference, replay, rolling-code, ADS-B/AIS
-  spoofing, counter-UAS, frequency-hopping, rogue-BTS/IMSI-catcher, TSCM
-  baseline-diff; response playbooks.
-- **SIGINT (ES):** ELINT pulse analysis (PW/PRI), jamming characterisation,
-  emitter catalogue / EOB, multi-node RSSI geolocation.
-- **Tracking:** decoded-ID sightings (ICAO/MMSI/sensor/capcode).
-- **Platform:** LLM copilot (`ai` console + `ask`), automation engine + console
-  (scheduled tasks, triggers, webhook alerting), multi-node hub/node linking,
-  mods/plugins, GNU Radio flowgraph presets, dev + global-simulate modes.
-- **HackRF hardware:** gains, amp, bias-tee, baseband filter, ppm, device serial,
-  Opera Cake antenna switch, external clock.
+| Stage | What it means | RFHound today | Gap / roadmap |
+|---|---|---|---|
+| **Tasking** | Decide what to look for | band plan, `at`/`tune`, recon targets, automations | watchlists tied to EOB; standing collection plans |
+| **Collection** | Receive the energy | sweep, capture (IQ+SigMF), decoders, multi-node hub | wideband survey scheduler; antenna/front-end guidance (below) |
+| **Processing** | Turn RF into measurements | `iqtools` (bandwidth, modulation), pulse analysis, sweep peaks | live decode→structured-data pipeline; deinterleaving |
+| **Exploitation / analysis** | Identify, characterise, locate | classifier, spoof/jam/rogue-BTS detection, emitter catalogue (EOB), RSSI geolocation | TDOA, DF (AoA), correlation across time, ML classifier |
+| **Dissemination** | Get it to a decision-maker | reports (MD/HTML), dashboard + REST API, webhook alerts, hub state | NDJSON/SIEM feeds, PDF, GeoJSON/KML map export |
+
+Discipline mapping: **COMINT** → decoders + interception detection; **ELINT** →
+`sigint pulse` (PW/PRI), emitter catalogue, jamming characterisation; **FISINT**
+→ TPMS/telemetry/ACARS decoding + ID tracking.
 
 ---
 
-## Roadmap
+## Collection hardware & front-end requirements
 
-Tiers: **Now** (next few iterations) · **Next** (planned) · **Later** (aspirational).
-Each item notes the guardrail it must respect.
+What a real deployment needs beyond the HackRF — captured here so the software
+can *guide* the operator (`doctor`/`setup` hints) and so DF/geolocation features
+have a hardware target.
+
+- **Antennas (band-appropriate is the #1 sensitivity factor):**
+  - Sub-GHz ISM (315/433/868/915) — tuned whip / telescopic; a **band-pass filter**
+    hugely helps in RF-dense sites.
+  - Wideband survey — **discone** (very wide) or a log-periodic.
+  - Directional / DF — **Yagi** (manual bearing), **Adcock** array (Watson-Watt),
+    **circular arrays** (pseudo-Doppler / correlative interferometry).
+  - ADS-B/GNSS/L-band — resonant 1090/1.5 GHz antennas; active GNSS patch.
+- **Front-end:** **LNA** (raise weak signals above the HackRF's noise figure) +
+  **bias-tee** to power it (already supported via `antenna_power`); **band-pass /
+  notch filters** to stop strong out-of-band signals (FM, cellular, pagers) from
+  desensitising or creating images.
+- **Timing/frequency reference (critical for DF/TDOA):** an **external 10 MHz
+  reference (GPSDO/OCXO)** shared across receivers for frequency coherence
+  (surfaced via `device clock`), and a **PPS** mark for sample-time alignment.
+- **Antenna switching:** **Opera Cake** (supported via `device operacake`) for
+  automated multi-antenna / filter-bank scanning by frequency or time.
+- **Multi-node:** ≥3 spatially separated, time/frequency-synchronised receivers
+  for TDOA; the `hub`/`node` link is the transport.
+- **TX resilience testing:** a **shielded enclosure / Faraday tent** — the only
+  place gated replay testing belongs.
+
+Roadmap: a **`doctor --rf` / knowledge-base "front-end guide"** that recommends
+antenna + filter + LNA per target band, and flags when a strong out-of-band
+signal is likely desensitising a capture.
+
+---
+
+## Direction finding & geolocation — methods & targets
+
+Locating an emitter is the highest-value SIGINT capability RFHound is missing at
+precision. Methods, their hardware cost, and RFHound's target:
+
+| Method | Principle | Hardware | Accuracy | RFHound |
+|---|---|---|---|---|
+| **RSSI / power-on-arrival** | stronger receiver ≈ closer; weighted centroid | ≥2–3 positioned single-antenna nodes | coarse (100s m) | ✅ `sigint locate` |
+| **Watson-Watt (Adcock)** | amplitude comparison on crossed pairs → bearing | Adcock array + coherent RX | ~1–5° | Later |
+| **Pseudo-Doppler** | electronically "rotate" a circular array → Doppler phase → bearing | switched circular array | few ° | Later |
+| **Correlative interferometry / MUSIC** | phase across baselines vs a reference manifold | multi-element array + multi-coherent RX | <1° (VHF/UHF) | Later (multi-HackRF, hard) |
+| **TDOA multilateration** | time-difference of arrival at separated sites → hyperbolae | ≥3 synced nodes (PPS/GPSDO) | good with geometry | **Next** (headline) |
+| **AoA + TDOA fusion** | combine bearings and TDOA; GDOP-aware | arrays + synced nodes | best | Later |
+
+**TDOA is the next big build.** Detail:
+- **Sync:** share a 10 MHz reference and a PPS mark; record short aligned IQ
+  snippets at each node on a common trigger.
+- **Measure:** cross-correlate node-pair captures → sub-sample TDOA (parabolic
+  interpolation of the correlation peak).
+- **Solve:** hyperbolic least-squares (Levenberg-Marquardt) for the emitter fix;
+  report a confidence region from **GDOP** (geometry).
+- **Deliver:** `sigint locate --tdoa`; nodes push timestamped snippets/TDOAs via
+  the hub. **Simulator-first** (synthetic TDOAs from a known geometry) so it's
+  fully testable without hardware. `numpy`-only; passive collection.
+- **Acceptance:** on a simulated 4-node geometry, recover a known emitter to
+  within the GDOP-predicted ellipse; degrade gracefully to RSSI with <3 nodes.
+
+---
+
+## Roadmap (themed, tiered, with acceptance criteria)
+
+Tiers: **Now** · **Next** · **Later**. Each item: guardrail + acceptance criteria
+(AC) + dependencies (dep).
 
 ### 1. Geolocation & direction finding
-
-- **[Next] TDOA multilateration (precise geolocation).** The upgrade from the
-  current RSSI-weighted centroid. Approach:
-  - Synchronise receivers: share a **10 MHz reference** (HackRF external clock
-    input — already surfaced via `device clock`) and/or a **PPS/GPSDO** time
-    mark; record aligned IQ across ≥3 nodes.
-  - Cross-correlate the shared captures to estimate **time difference of arrival**
-    per node pair; solve the hyperbolic system for an emitter fix.
-  - Deliver via the hub: nodes push timestamped IQ snippets / TDOA measurements;
-    a `sigint locate --tdoa` mode does the multilateration.
-  - Needs `numpy`; correlation + least-squares solve. Ship with a simulator
-    (synthetic TDOAs from known geometry) so it's testable without hardware.
-  - Guardrail: passive collection only.
-- **[Later] Power-on-arrival + map export.** Fuse RSSI and TDOA; export fixes as
-  GeoJSON/KML for mapping. Confidence ellipses from geometry (GDOP).
-- **[Later] Single-node pseudo-DF** with a rotating/directional antenna: log
-  power-vs-bearing to estimate a bearing from one site.
+- **[Next] TDOA multilateration** — see the detailed section above.
+  *AC:* simulated multi-node fix within GDOP ellipse; hub transport; RSSI
+  fallback. *Dep:* `numpy`, hub, node time sync. *Guardrail:* passive.
+- **[Later] POA+TDOA fusion; GeoJSON/KML export; confidence ellipses (GDOP).**
+- **[Later] Single-node pseudo-DF** with a rotating/directional antenna (log
+  power-vs-bearing). *Dep:* Opera Cake or a rotator; front-end guide.
 
 ### 2. Signal analysis & classification
-
 - **[Now] Auto-fill `--mod` in `sweep --identify`.** Grab a short IQ snippet per
-  strong peak, run modulation detection, feed it back into the classifier for a
-  sharper guess in one pass.
+  strong peak → modulation detection → sharper classifier guess in one pass.
+  *AC:* `--identify --measure` fills modulation for real captures; simulated path
+  tested. *Dep:* `iqtools`.
 - **[Next] Analog-vs-digital + duty-cycle/periodicity classifiers.** Identify
-  polling sensors (regular bursts), continuous vs bursty, analog vs digital —
-  extend `iqtools`/`classify`.
-- **[Next] Channel-plan snapping.** Snap a measured bandwidth/step to a known
+  polling sensors (regular bursts), continuous vs bursty. *AC:* labels on
+  synthetic burst/continuous signals.
+- **[Next] Channel-plan snapping.** Snap measured bandwidth/step to known
   channelisation (12.5/25 kHz LMR, 200 kHz GSM, LoRa BW) to narrow the guess.
-- **[Later] Optional ML modulation classifier** as a plugin extra (keeps core
-  light). Train/ship a small model; never a hard dependency.
+- **[Later] Optional ML modulation classifier** as a plugin extra (never a hard
+  dep). *Dep:* a small shipped/trainable model.
 
 ### 3. Decoders & protocol coverage
-
 - **[Next] Live decoder → detector/sightings/EOB wiring.** Stream `rtl_433` /
-  `dump1090` / AIS JSON directly into spoof-detection, the sightings tracker, and
-  the emitter catalogue in real time (today `decode --track` covers sightings;
-  extend to detectors + EOB).
-- **[Next] More recipes:** Meshtastic/LoRa PHY, Z-Wave (US 908.42 / EU 868.42),
-  rtl_amr wmbus (smart meters, EU), inmarsat STD-C (JAERO), HDLC/ADS-C.
-- **[Later] IQ-file decoding path.** Where a tool supports it (`rtl_433 -r`,
-  URH CLI), decode directly from a recording, not just live RF.
+  `dump1090` / AIS JSON straight into spoof-detection, `track`, and the emitter
+  catalogue in real time. *AC:* a decode session updates spoof-check + EOB live.
+- **[Next] More recipes:** Meshtastic/LoRa PHY, Z-Wave (908.42/868.42), wM-Bus
+  (EU meters), Inmarsat STD-C (JAERO), ADS-C. *AC:* each recipe + doctor hint +
+  DECODERS.md row.
+- **[Later] IQ-file decoding** where the tool supports it (`rtl_433 -r`, URH CLI).
 
-### 4. Detection & SIGINT depth
-
+### 4. Detection & SIGINT depth (traces to THREATS.md gaps)
 - **[Next] Emitter-catalogue intelligence.** Alert on a *new* emitter vs a saved
-  EOB baseline (TSCM at the emitter level); track an emitter's on/off pattern and
-  power trend over time; tie into automation.
-- **[Next] Jamming characterisation from IQ.** Feed `sigint jamming` an IQ
-  capture (not just a sweep) to detect swept/chirp and pulsed jammers via the
-  hopping + pulse analysers.
-- **[Later] GNSS interference monitor.** Passive detection of GPS
-  jamming/spoofing indicators (C/N0 anomalies) if a GNSS front-end feed is
-  available. Detection only — never TX.
+  EOB baseline (TSCM at emitter level); track on/off patterns + power trend;
+  tie into automation. *AC:* diff two EOB snapshots; alert on new emitter.
+- **[Next] Jamming characterisation from IQ.** Feed `sigint jamming` an IQ capture
+  to catch **swept/chirp** and **pulsed** jammers (via hop + pulse analysers).
+- **[Next] Correlated RollJam detector.** Fuse `defense monitor` (jam) + a fob
+  press in time → flag the jam-then-capture pattern. *AC:* simulated trace flags.
+- **[Later] GNSS interference monitor.** Passive GPS jamming/spoofing indicators
+  (C/N0 anomalies, power step, position/time jump) from a GNSS front-end feed.
+  **Detection only — never TX.**
+- **[Later] Cellular downgrade detection.** Flag 2G-forcing / re-selection
+  patterns alongside the existing rogue-BTS indicators.
+- **[Later] Selective-jamming detection** (LoRaWAN/others): jamming synced to
+  specific frames.
 
 ### 5. Platform, integration & ops
-
-- **[Now] Alerting expansion.** Add email (SMTP) alongside webhooks in the
-  automation engine; templated alert payloads for SIEM/chat.
-- **[Next] NDJSON streaming API + tokened auth** on the web server and hub for
-  real SIEM feeds; optional read auth.
-- **[Next] Packaging & deployment:** publish to **PyPI**; a **Docker image**;
-  **systemd units** for the hub and the automation scheduler so a sensor node
-  runs unattended.
-- **[Later] PDF situational-awareness reports** (extend the Markdown/HTML report
-  generator).
-- **[Later] Persistent spectrum-survey store** (long-term occupancy DB) with a
-  timeline view.
+- **[Now] Alerting expansion.** SMTP email alongside webhooks; templated payloads
+  for SIEM/chat. *AC:* automation fires an email in a test SMTP.
+- **[Next] NDJSON streaming API + optional token auth** on web + hub for SIEM.
+- **[Next] Packaging & deployment:** **PyPI**, a **Docker image**, **systemd
+  units** for hub + automation scheduler (unattended sensor node).
+- **[Later] PDF situational-awareness reports** (extend the report generator).
+- **[Later] Persistent spectrum-survey store** (occupancy DB + timeline view).
 
 ### 6. UX & dashboard
-
-- **[Now] Dashboard: live decode output panel + demod one-click presets;** surface
-  the emitter catalogue and sightings as panels (endpoints exist / are cheap).
-- **[Next] Config wizard** (`rfhound config wizard`) for first-run gains,
-  output dir, LLM/hub settings.
-- **[Next] Dashboard bookmarks add/edit** (currently read-only on the web; keep
-  writes gated + optional-auth).
-- **[Later] Deeper URH/inspectrum handoff** buttons/links from a recording.
+- **[Now] Dashboard: live decode panel + demod one-click presets; EOB & sightings
+  panels** (endpoints exist / cheap).
+- **[Next] Config wizard** (`rfhound config wizard`).
+- **[Next] Dashboard bookmark add/edit** (gated + optional-auth writes).
+- **[Next] Front-end guide** surfaced in `doctor`/knowledge base (antenna/filter/
+  LNA per band).
+- **[Later] Deeper URH/inspectrum handoff** from a recording.
 
 ### 7. Quality & release
-
-- **[Now] `test_frequency_accuracy.py`** — assert canonical frequencies (ADS-B
-  1090/978, AIS 161.975/162.025, WSPR 14.0956, GPS 1575.42, NOAA APT 137.100,
-  ISM 315/433.92/868.3/915…) so the charts can't silently drift.
-- **[Now] Tag v1.1.0** with a CHANGELOG entry covering everything since 1.0:
-  SIGINT/EW-support, automation, AI console, recordings, ID tracker, emitter
-  catalogue, HackRF Opera Cake/clock, dashboard S-meter/bookmarks, classifier +
-  IQ modulation detection.
-- **[Next] CI badge + coverage;** contributor guide (`CONTRIBUTING.md`).
-- **[Ongoing] Keep the suite green and flake8-clean on every change.**
+- **[Done in 1.1.0] `test_frequency_accuracy.py`** (canonical freqs locked).
+- **[Done] v1.1.0** cut with CHANGELOG.
+- **[Now] Tag v1.1.0 on GitHub** (blocked locally by proxy on tag refs — needs a
+  maintainer click, or a later retry).
+- **[Next] CI badge + coverage; `CONTRIBUTING.md`; publish THREATS.md link** in
+  README.
+- **[Ongoing] Keep the suite green + flake8-clean on every change; every new
+  capability ships a `--simulate` path and tests.**
 
 ---
 
@@ -165,18 +205,33 @@ Each item notes the guardrail it must respect.
 
 To keep future-me honest: **Electronic Attack and offensive transmit.** No
 jammers, no barrage/spot/swept/pulsed jamming *generators*, no GPS/ADS-B/AIS/EPIRB
-**spoofers**, no RollJam, no code brute-forcers, no IMSI **catcher**, no SS7
-tooling, no arbitrary/customizable **transmitters**, no drone takeover / active
-RF countermeasures. RFHound *detects, measures, characterises, and locates* these
-threats so a defender can respond — it never becomes the weapon. Requests to add
-them get the same answer regardless of framing.
+**spoofers**, no RollJam/RollBack tooling, no code brute-forcers, no IMSI
+**catcher**, no SS7/Diameter tooling, no arbitrary/customizable **transmitters**,
+no drone takeover / active RF countermeasures. RFHound *detects, measures,
+characterises, and locates* these threats so a defender can respond — it never
+becomes the weapon. Requests to add them get the same answer regardless of
+framing. The threat descriptions in [`docs/THREATS.md`](docs/THREATS.md) are
+defensive threat-modelling, not attack how-tos.
 
 ---
 
-## Near-term next steps (concrete queue)
+## Near-term queue (concrete)
 
-1. Cut **v1.1.0** (+ CHANGELOG) and add `test_frequency_accuracy.py`.
-2. **Auto-fill `--mod`** in `sweep --identify`.
-3. **Email alerting** in automation; NDJSON + optional auth on hub/web.
-4. **TDOA** module (simulator-first), delivered through the hub.
-5. Dashboard: **live decode + emitter/sightings panels**.
+1. **Auto-fill `--mod`** in `sweep --identify` (quick win, high value).
+2. **Correlated RollJam detector** + **jamming-from-IQ** (swept/pulsed).
+3. **Email alerting**; NDJSON + optional auth on hub/web.
+4. **TDOA** module (simulator-first) via the hub — the headline geolocation build.
+5. **Emitter-catalogue intelligence** (new-emitter alerting) + dashboard EOB panel.
+6. **PyPI + Docker + systemd** packaging for unattended sensor nodes.
+
+---
+
+## References
+
+- SIGINT disciplines & cycle — [Trenton Systems](https://www.trentonsystems.com/en-us/resource-hub/blog/sigint-vs-comint-vs-elint) ·
+  [Naval War College](https://usnwc.libguides.com/c.php?g=494120&p=3381559) ·
+  [Maltego collection disciplines](https://www.maltego.com/blog/understanding-the-different-types-of-intelligence-collection-disciplines/)
+- Direction finding & geolocation — [Rohde & Schwarz DF methodologies](https://cdn.rohde-schwarz.com/am/us/campaigns_2/a_d/Intro-to-direction-finding-methodologies.pdf) ·
+  [CRFS AoA/DF](https://pages.crfs.com/hubfs/whitepapers/Angle%20of%20Arrival-Direction%20Finding.pdf) ·
+  [CRFS DF for EW/SIGINT](https://www.crfs.com/blog/radio-direction-finding-techniques-and-applications-for-ew-and-sigint)
+- Threat sources — see [`docs/THREATS.md`](docs/THREATS.md) references.

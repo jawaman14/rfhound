@@ -175,6 +175,7 @@ ACARS/APRS, NOAA weather-satellite imagery, GPS L1 (receive-only), and the busy
 - [`docs/AUTOMATION.md`](docs/AUTOMATION.md) — scheduled/looping RF tasks with triggers and alerting
 - [`docs/RECORDINGS.md`](docs/RECORDINGS.md) — captures that store their classification + decode settings
 - [`docs/SIGINT.md`](docs/SIGINT.md) — SIGINT/EW-support: ELINT pulse analysis, jamming characterisation, EOB, geolocation
+- [`docs/THREATS.md`](docs/THREATS.md) — RF threat model & attack surface by band/encoding (defensive)
 - [`docs/FREQUENCIES.md`](docs/FREQUENCIES.md) — the frequency knowledge base
 - [`docs/MODDING.md`](docs/MODDING.md) — extend RFHound with your own bands/decoders/detectors
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — how it's built and how to extend it
