@@ -990,6 +990,87 @@ def cmd_automate(args: argparse.Namespace, cfg: Config) -> int:
     return 1
 
 
+def cmd_sigint(args: argparse.Namespace, cfg: Config) -> int:
+    from .modules import sigint
+    sim = args.simulate or cfg.simulate_mode or not device.is_present()
+    sub = args.sigint_cmd
+
+    if sub == "pulse":
+        if not args.file:
+            console.error("Provide an IQ capture: rfhound sigint pulse --file capture.sigmf-data")
+            return 1
+        try:
+            prof = sigint.analyze_pulses_file(Path(args.file))
+        except (RuntimeError, OSError) as exc:
+            console.error(str(exc))
+            return 2
+        console.rule("ELINT pulse analysis")
+        console.print_(f"Classification: {prof.classification}")
+        console.print_(f"  {prof.detail}")
+        return 0
+
+    if sub == "jamming":
+        result = sweep_mod.sweep(cfg, args.start, args.stop, simulate=sim)
+        spectrum = [b.power_db for b in result.bins]
+        prof = sigint.characterize_interference(spectrum, result.noise_floor_db)
+        console.rule("Interference / jamming characterisation")
+        if prof.kind == "none":
+            console.success(f"No jamming signature (occupancy {prof.occupancy:.0%}).")
+            return 0
+        console.error(f"Jamming type: {prof.kind.upper()} ({prof.confidence}%)")
+        console.print_(f"  {prof.detail}")
+        return 1
+
+    if sub == "emitters":
+        cat = sigint.EmitterCatalog()
+        if args.scan:
+            result = sweep_mod.sweep(cfg, args.start, args.stop, simulate=sim)
+            from .modules import classify as classify_mod
+            for p in result.peaks:
+                bw = classify_mod.estimate_bandwidth_khz(result, p.freq_hz)
+                g = classify_mod.classify(p.freq_mhz, bandwidth_khz=bw)[0]
+                cat.ingest(p.freq_mhz, power_db=p.power_db, bandwidth_khz=bw,
+                           guess=g.name, save=False)
+            cat.save()
+            console.success(f"Ingested {len(result.peaks)} peak(s) into the catalogue.")
+        if args.clear:
+            n = cat.clear()
+            console.success(f"Cleared {n} emitter(s).")
+            return 0
+        emitters = cat.list()
+        if not emitters:
+            console.warn("Empty catalogue. Populate it: rfhound sigint emitters --scan <lo> <hi>")
+            return 0
+        rows = [[f"{e.freq_mhz:.4f}", e.itu, f"{e.max_power_db}" if e.max_power_db else "—",
+                 f"{e.bandwidth_khz:.0f}" if e.bandwidth_khz else "—",
+                 e.guess or "—", str(e.count)] for e in emitters]
+        console.table(f"Emitter catalogue / EOB ({len(emitters)})",
+                      ["Freq MHz", "ITU", "Max dB", "BW kHz", "Likely", "Seen"], rows)
+        return 0
+
+    if sub == "locate":
+        import json
+        if args.simulate:
+            reports = sigint.simulate_reports()
+        elif args.file:
+            reports = json.loads(Path(args.file).read_text())
+        else:
+            console.error("Provide --file reports.json (or --simulate).")
+            return 1
+        est = sigint.geolocate(reports)
+        console.rule("Multi-node RSSI geolocation")
+        if est.lat is None:
+            console.warn(est.detail)
+            return 1
+        console.success(f"Estimated position: {est.lat}, {est.lon} "
+                        f"({est.confidence}% · {est.n_receivers} receivers)")
+        console.print_(f"  strongest receiver: {est.strongest}  ·  {est.detail}")
+        return 0
+
+    console.error("Unknown sigint subcommand.")
+    return 1
+
+
 def cmd_bookmark(args: argparse.Namespace, cfg: Config) -> int:
     if args.bm_cmd == "add":
         cfg.bookmarks = [b for b in cfg.bookmarks if b.get("name") != args.name]
@@ -1292,6 +1373,26 @@ def build_parser() -> argparse.ArgumentParser:
     ggen.add_argument("--data-out", help="Preset output file (wav/iq/f32)")
     ggen.add_argument("--quiet", action="store_true", help="Don't print the generated code")
     pg.set_defaults(func=cmd_gnuradio, gr_cmd="list")
+
+    psi = sub.add_parser("sigint", help="SIGINT/EW-support: ELINT, jamming char., EOB, geolocation")
+    sisub = psi.add_subparsers(dest="sigint_cmd")
+    sip = sisub.add_parser("pulse", help="ELINT pulse analysis (PW/PRI) from an IQ capture")
+    sip.add_argument("--file", help="IQ capture (.sigmf-data)")
+    sij = sisub.add_parser("jamming", help="Characterise interference type on a band")
+    sij.add_argument("start", type=float, help="Start MHz")
+    sij.add_argument("stop", type=float, help="Stop MHz")
+    sij.add_argument("--simulate", action="store_true")
+    sie = sisub.add_parser("emitters", help="Emitter catalogue / Electronic Order of Battle")
+    sie.add_argument("--scan", action="store_true", help="Sweep and ingest peaks first")
+    sie.add_argument("start", type=float, nargs="?", default=430.0, help="Scan start MHz")
+    sie.add_argument("stop", type=float, nargs="?", default=440.0, help="Scan stop MHz")
+    sie.add_argument("--clear", action="store_true", help="Clear the catalogue")
+    sie.add_argument("--simulate", action="store_true")
+    sil = sisub.add_parser("locate", help="Estimate emitter position from multi-node RSSI")
+    sil.add_argument("--file", help="JSON array of {node,lat,lon,rssi} reports")
+    sil.add_argument("--simulate", action="store_true")
+    psi.set_defaults(func=cmd_sigint, sigint_cmd=None, simulate=False,
+                     start=430.0, stop=440.0, file=None, scan=False, clear=False)
 
     pau = sub.add_parser("automate", help="Automation: scheduled/looping RF tasks with alerting")
     ausub = pau.add_subparsers(dest="automate_cmd")
