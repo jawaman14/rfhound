@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from rfhound.config import Config
 from rfhound.modules import intel
 

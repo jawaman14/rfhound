@@ -1,5 +1,4 @@
 from rfhound import bandplan, plugins
-from rfhound.modules import decode as decode_mod
 
 
 SAMPLE = '''

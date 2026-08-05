@@ -1,8 +1,6 @@
 """Drive the interactive menu non-interactively by feeding stdin."""
 import builtins
 
-import pytest
-
 from rfhound import menu
 from rfhound.config import Config
 

@@ -30,7 +30,8 @@ def test_register_and_report_roundtrip(hub_url):
 
 
 def test_state_endpoint(hub_url):
-    import json, urllib.request
+    import json
+    import urllib.request
     url, state = hub_url
     node_mod.register(url, "n2", name="x")
     with urllib.request.urlopen(url + "/api/hub/state", timeout=5) as r:

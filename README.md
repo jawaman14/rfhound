@@ -1,7 +1,7 @@
 # RFHound 🐕‍🦺📡
 
 **A friendly, powerful HackRF reconnaissance & RF situational-awareness toolkit.**
-_Version 1.0 · receive-first · 197 tests · MIT._
+_Version 1.1 · receive-first · 207 tests · MIT._
 
 RFHound turns a wall of raw spectrum into *"oh, that's a tire-pressure sensor"*.
 It is an **orchestration layer** — it does not re-implement DSP. Instead it

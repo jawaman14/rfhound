@@ -1,5 +1,4 @@
 import json
-from pathlib import Path
 
 from rfhound.config import Config, TxAllowRange, load_config, save_config
 from rfhound.modules import recon as recon_mod
