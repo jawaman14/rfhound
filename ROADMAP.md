@@ -105,7 +105,7 @@ precision. Methods, their hardware cost, and RFHound's target:
 | **TDOA multilateration** | time-difference of arrival at separated sites → hyperbolae | ≥3 synced nodes (PPS/GPSDO) | good with geometry | **Next** (headline) |
 | **AoA + TDOA fusion** | combine bearings and TDOA; GDOP-aware | arrays + synced nodes | best | Later |
 
-**TDOA is the next big build.** Detail:
+**TDOA — shipped** (`sigint locate --tdoa`, simulator-first). Detail:
 - **Sync:** share a 10 MHz reference and a PPS mark; record short aligned IQ
   snippets at each node on a common trigger.
 - **Measure:** cross-correlate node-pair captures → sub-sample TDOA (parabolic
@@ -126,9 +126,13 @@ Tiers: **Now** · **Next** · **Later**. Each item: guardrail + acceptance crite
 (AC) + dependencies (dep).
 
 ### 1. Geolocation & direction finding
-- **[Next] TDOA multilateration** — see the detailed section above.
-  *AC:* simulated multi-node fix within GDOP ellipse; hub transport; RSSI
-  fallback. *Dep:* `numpy`, hub, node time sync. *Guardrail:* passive.
+- **[Done] TDOA multilateration** — `sigint locate --tdoa`: cross-correlation
+  TDOA estimation (sub-sample) + Gauss-Newton hyperbolic solve + GDOP confidence,
+  simulator-first, RSSI fallback with <3 nodes. *Remaining:* deliver node
+  snippets over the hub for a live multi-receiver fix (currently local/file/IQ).
+- **[Next] Hub-delivered TDOA** — nodes push time-aligned IQ snippets / TDOAs to
+  the hub on a common trigger; `locate --tdoa` pulls from hub state. *Dep:* node
+  time sync (PPS/GPSDO). *Guardrail:* passive.
 - **[Later] POA+TDOA fusion; GeoJSON/KML export; confidence ellipses (GDOP).**
 - **[Later] Single-node pseudo-DF** with a rotating/directional antenna (log
   power-vs-bearing). *Dep:* Opera Cake or a rotator; front-end guide.
@@ -220,7 +224,8 @@ defensive threat-modelling, not attack how-tos.
 1. **Auto-fill `--mod`** in `sweep --identify` (quick win, high value).
 2. **Correlated RollJam detector** + **jamming-from-IQ** (swept/pulsed).
 3. **Email alerting**; NDJSON + optional auth on hub/web.
-4. **TDOA** module (simulator-first) via the hub — the headline geolocation build.
+4. ~~TDOA module (simulator-first)~~ — **done** (`sigint locate --tdoa`); next is
+   hub-delivered snippets for a live multi-receiver fix.
 5. **Emitter-catalogue intelligence** (new-emitter alerting) + dashboard EOB panel.
 6. **PyPI + Docker + systemd** packaging for unattended sensor nodes.
 

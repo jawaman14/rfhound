@@ -64,4 +64,28 @@ rfhound sigint locate --file reports.json   # [{"node","lat","lon","rssi"}, ...]
 ```
 
 A single receiver's RSSI cannot localise; this needs ≥2–3 positioned receivers.
-(For precise fixes, TDOA with synchronised receivers is the next step.)
+
+### Precise fixes — TDOA multilateration — `sigint locate --tdoa`
+
+For a precise fix, use **time-difference-of-arrival** across ≥3 *synchronised*
+receivers (shared 10 MHz reference + PPS). RFHound cross-correlates each node's
+IQ snippet against a reference node (sub-sample parabolic interpolation),
+estimates the TDOAs, and solves the hyperbolic system (Gauss-Newton least
+squares) for the emitter position — with a **GDOP**-based confidence radius from
+the geometry.
+
+```bash
+rfhound sigint locate --tdoa --simulate
+# → Estimated position: 51.5100, -0.1181 (tdoa)
+#   4 nodes · ±24.8 m · GDOP 0.83 · residual 2.0 m · multilateration over 4 nodes
+
+rfhound sigint locate --tdoa --file nodes.json
+#   nodes.json: [{"node","lat","lon","tdoa_s"}, ...]  (reference node tdoa_s = 0)
+```
+
+Provide `tdoa_s` per node (arrival time relative to the reference), or feed
+time-aligned IQ snippets and let RFHound measure the TDOAs by cross-correlation.
+With fewer than 3 synchronised nodes it **degrades gracefully to the RSSI
+centroid**. Needs NumPy (`rfhound[iq]`). Passive collection only — RFHound never
+transmits. See the [ROADMAP](../ROADMAP.md) DF/geolocation section for the
+hardware sync requirements.

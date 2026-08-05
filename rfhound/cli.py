@@ -1050,6 +1050,38 @@ def cmd_sigint(args: argparse.Namespace, cfg: Config) -> int:
 
     if sub == "locate":
         import json
+        if args.tdoa:
+            from .modules import tdoa as tdoa_mod
+            if args.simulate:
+                nodes = tdoa_mod.simulate_scenario(
+                    (51.510, -0.118),
+                    [(51.520, -0.120), (51.505, -0.100), (51.500, -0.130), (51.515, -0.140)],
+                    sigma_tdoa_s=2e-8)
+            elif args.file:
+                raw = json.loads(Path(args.file).read_text())
+                nodes = [tdoa_mod.Node(**n) for n in raw]
+            else:
+                console.error("Provide --file nodes.json (with tdoa_s) or --simulate.")
+                return 1
+            try:
+                fix = tdoa_mod.geolocate_tdoa(nodes)
+            except RuntimeError as exc:
+                console.error(str(exc))
+                return 2
+            console.rule("TDOA multilateration")
+            if fix.lat is None:
+                console.warn(fix.detail)
+                return 1
+            console.success(f"Estimated position: {fix.lat}, {fix.lon}  ({fix.method})")
+            extra = []
+            if fix.confidence_m is not None:
+                extra.append(f"±{fix.confidence_m} m")
+            if fix.gdop is not None:
+                extra.append(f"GDOP {fix.gdop}")
+            if fix.residual_m is not None:
+                extra.append(f"residual {fix.residual_m} m")
+            console.print_(f"  {fix.n_nodes} nodes · " + " · ".join(extra) + f" · {fix.detail}")
+            return 0
         if args.simulate:
             reports = sigint.simulate_reports()
         elif args.file:
@@ -1388,11 +1420,13 @@ def build_parser() -> argparse.ArgumentParser:
     sie.add_argument("stop", type=float, nargs="?", default=440.0, help="Scan stop MHz")
     sie.add_argument("--clear", action="store_true", help="Clear the catalogue")
     sie.add_argument("--simulate", action="store_true")
-    sil = sisub.add_parser("locate", help="Estimate emitter position from multi-node RSSI")
-    sil.add_argument("--file", help="JSON array of {node,lat,lon,rssi} reports")
+    sil = sisub.add_parser("locate", help="Estimate emitter position (RSSI centroid or TDOA)")
+    sil.add_argument("--file", help="JSON array of {node,lat,lon,rssi} (or +tdoa_s for --tdoa)")
+    sil.add_argument("--tdoa", action="store_true",
+                     help="TDOA multilateration (needs >=3 synchronised nodes with tdoa_s)")
     sil.add_argument("--simulate", action="store_true")
     psi.set_defaults(func=cmd_sigint, sigint_cmd=None, simulate=False,
-                     start=430.0, stop=440.0, file=None, scan=False, clear=False)
+                     start=430.0, stop=440.0, file=None, scan=False, clear=False, tdoa=False)
 
     pau = sub.add_parser("automate", help="Automation: scheduled/looping RF tasks with alerting")
     ausub = pau.add_subparsers(dest="automate_cmd")
