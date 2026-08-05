@@ -162,6 +162,7 @@ ACARS/APRS, NOAA weather-satellite imagery, GPS L1 (receive-only), and the busy
 
 - [`docs/HELP.md`](docs/HELP.md) — **full command reference** (start here)
 - [`CHANGELOG.md`](CHANGELOG.md) — version history
+- [`ROADMAP.md`](ROADMAP.md) — where the project is going (incl. TDOA geolocation)
 - [`docs/LEGAL.md`](docs/LEGAL.md) — **read this first**; law, ethics, and what's excluded
 - [`docs/USAGE.md`](docs/USAGE.md) — install the decoders, recipes, workflows
 - [`docs/DECODERS.md`](docs/DECODERS.md) — the full decoder list + the signal auto-classifier
