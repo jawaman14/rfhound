@@ -130,9 +130,10 @@ Tiers: **Now** · **Next** · **Later**. Each item: guardrail + acceptance crite
   TDOA estimation (sub-sample) + Gauss-Newton hyperbolic solve + GDOP confidence,
   simulator-first, RSSI fallback with <3 nodes. *Remaining:* deliver node
   snippets over the hub for a live multi-receiver fix (currently local/file/IQ).
-- **[Next] Hub-delivered TDOA** — nodes push time-aligned IQ snippets / TDOAs to
-  the hub on a common trigger; `locate --tdoa` pulls from hub state. *Dep:* node
-  time sync (PPS/GPSDO). *Guardrail:* passive.
+- **[Done] Hub-delivered TDOA** — `sigint locate --tdoa --hub URL`: nodes push
+  time-aligned IQ snippets (base64 ci8) or pre-computed TDOAs to the hub under a
+  common *trigger*; the solver pulls, cross-correlates, and fixes. *Remaining:*
+  real node-side sample alignment (PPS/GPSDO) and a triggered capture command.
 - **[Later] POA+TDOA fusion; GeoJSON/KML export; confidence ellipses (GDOP).**
 - **[Later] Single-node pseudo-DF** with a rotating/directional antenna (log
   power-vs-bearing). *Dep:* Opera Cake or a rotator; front-end guide.

@@ -83,6 +83,21 @@ rfhound sigint locate --tdoa --file nodes.json
 #   nodes.json: [{"node","lat","lon","tdoa_s"}, ...]  (reference node tdoa_s = 0)
 ```
 
+**Hub-delivered (distributed) TDOA.** Several nodes push a time-aligned IQ
+snippet to a [hub](MULTINODE.md) for a common collection *trigger*; the solver
+pulls them, measures the TDOAs by cross-correlation, and computes the fix:
+
+```bash
+rfhound hub --port 8787                                   # run the aggregator
+# each node (on a shared PPS/10 MHz trigger) pushes its snippet via the API...
+rfhound sigint locate --tdoa --hub http://HUB:8787        # pull latest trigger + solve
+rfhound sigint locate --tdoa --hub http://HUB:8787 --simulate  # seed + solve (demo)
+rfhound sigint locate --tdoa --hub http://HUB:8787 --trigger run1   # a specific event
+```
+
+Real deployments must **sample-align** the snippets (shared 10 MHz reference +
+PPS) — see the [ROADMAP](../ROADMAP.md) hardware-sync notes.
+
 Provide `tdoa_s` per node (arrival time relative to the reference), or feed
 time-aligned IQ snippets and let RFHound measure the TDOAs by cross-correlation.
 With fewer than 3 synchronised nodes it **degrades gracefully to the RSSI

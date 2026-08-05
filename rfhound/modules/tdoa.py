@@ -19,6 +19,7 @@ Passive collection only. Needs NumPy (``pip install rfhound[iq]``).
 
 from __future__ import annotations
 
+import base64
 import math
 from dataclasses import dataclass
 
@@ -234,6 +235,65 @@ def simulate_scenario(emitter: tuple, node_latlons: list[tuple], *,
             tdoa += rng.gauss(0, sigma_tdoa_s)
         nodes.append(Node(f"node{i}", la, lo, tdoa_s=(0.0 if i == 0 else tdoa)))
     return nodes
+
+
+# --------------------------------------------------------------------------- #
+# Hub transport — encode/decode IQ snippets and rebuild nodes from reports
+# --------------------------------------------------------------------------- #
+def encode_iq_b64(iq) -> tuple:
+    """Encode a complex IQ snippet as base64 ci8 (per-snippet normalised).
+
+    Amplitude scaling is per-snippet, which is fine for TDOA: cross-correlation
+    peak position is invariant to per-signal scale. Returns (b64, n_samples).
+    """
+    np = _np()
+    a = np.asarray(iq)
+    m = float(np.max(np.abs(a))) or 1.0
+    scaled = a / m * 127.0
+    inter = np.empty(a.size * 2, dtype=np.int8)
+    inter[0::2] = np.clip(scaled.real, -127, 127).astype(np.int8)
+    inter[1::2] = np.clip(scaled.imag, -127, 127).astype(np.int8)
+    return base64.b64encode(inter.tobytes()).decode(), int(a.size)
+
+
+def decode_iq_b64(b64: str, n: int | None = None):
+    np = _np()
+    raw = np.frombuffer(base64.b64decode(b64), dtype=np.int8).astype(np.float32) / 127.0
+    if raw.size % 2:
+        raw = raw[:-1]
+    return (raw[0::2] + 1j * raw[1::2]).astype(np.complex64)
+
+
+def nodes_from_hub_reports(reports: list[dict], *, trigger=None) -> list[Node]:
+    """Rebuild TDOA nodes from hub reports (kind == 'tdoa').
+
+    Reports may carry IQ snippets (``iq_b64`` + ``n`` + ``sample_rate``) — in
+    which case TDOAs are measured by cross-correlation — or a pre-computed
+    ``tdoa_s``. All reports sharing a *trigger* form one collection event; if no
+    trigger is given, the most recent one is used.
+    """
+    td = [r for r in reports if r.get("kind") == "tdoa" and isinstance(r.get("data"), dict)]
+    if not td:
+        return []
+    if trigger is None:
+        trigger = max(td, key=lambda r: r.get("t", 0))["data"].get("trigger")
+    latest: dict = {}
+    for r in sorted(td, key=lambda r: r.get("t", 0)):
+        d = r["data"]
+        if d.get("trigger") != trigger:
+            continue
+        nid = r.get("node_id") or d.get("node") or f"n{len(latest)}"
+        latest[nid] = d
+    items = sorted(latest.items())
+    if not items:
+        return []
+    if all("iq_b64" in d for _, d in items):
+        sr = int(items[0][1].get("sample_rate", 20_000_000))
+        caps = [{"node": nid, "lat": d["lat"], "lon": d["lon"],
+                 "iq": decode_iq_b64(d["iq_b64"], d.get("n"))} for nid, d in items]
+        return tdoa_from_captures(caps, sr)
+    return [Node(nid, d["lat"], d["lon"], tdoa_s=d.get("tdoa_s"), rssi=d.get("rssi"))
+            for nid, d in items]
 
 
 def simulate_captures(emitter: tuple, node_latlons: list[tuple], *,

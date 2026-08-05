@@ -1051,17 +1051,39 @@ def cmd_sigint(args: argparse.Namespace, cfg: Config) -> int:
     if sub == "locate":
         import json
         if args.tdoa:
+            import time
             from .modules import tdoa as tdoa_mod
-            if args.simulate:
-                nodes = tdoa_mod.simulate_scenario(
-                    (51.510, -0.118),
-                    [(51.520, -0.120), (51.505, -0.100), (51.500, -0.130), (51.515, -0.140)],
-                    sigma_tdoa_s=2e-8)
+            geom = [(51.520, -0.120), (51.505, -0.100), (51.500, -0.130), (51.515, -0.140)]
+            if args.hub:
+                from .net import node as node_mod
+                if args.simulate:
+                    # Seed the hub: simulate aligned captures and push one per node.
+                    trig = args.trigger or f"sim-{int(time.time())}"
+                    caps = tdoa_mod.simulate_captures((51.510, -0.118), geom,
+                                                      sample_rate=20_000_000, n_samples=8192)
+                    for c in caps:
+                        b64, n = tdoa_mod.encode_iq_b64(c["iq"])
+                        node_mod.push_tdoa(args.hub, c["node"], c["lat"], c["lon"], trig,
+                                           iq_b64=b64, n=n, sample_rate=20_000_000,
+                                           token=args.token)
+                    console.info(f"Pushed {len(caps)} TDOA snippets to {args.hub} (trigger {trig}).")
+                try:
+                    state = node_mod.hub_state(args.hub, token=args.token)
+                except Exception as exc:
+                    console.error(f"Could not reach hub {args.hub}: {exc}")
+                    return 2
+                nodes = tdoa_mod.nodes_from_hub_reports(state.get("reports", []),
+                                                        trigger=args.trigger)
+                if not nodes:
+                    console.warn("No TDOA contributions on the hub for that trigger yet.")
+                    return 1
+            elif args.simulate:
+                nodes = tdoa_mod.simulate_scenario((51.510, -0.118), geom, sigma_tdoa_s=2e-8)
             elif args.file:
                 raw = json.loads(Path(args.file).read_text())
                 nodes = [tdoa_mod.Node(**n) for n in raw]
             else:
-                console.error("Provide --file nodes.json (with tdoa_s) or --simulate.")
+                console.error("Provide --hub URL, --file nodes.json, or --simulate.")
                 return 1
             try:
                 fix = tdoa_mod.geolocate_tdoa(nodes)
@@ -1424,9 +1446,13 @@ def build_parser() -> argparse.ArgumentParser:
     sil.add_argument("--file", help="JSON array of {node,lat,lon,rssi} (or +tdoa_s for --tdoa)")
     sil.add_argument("--tdoa", action="store_true",
                      help="TDOA multilateration (needs >=3 synchronised nodes with tdoa_s)")
+    sil.add_argument("--hub", help="Pull TDOA contributions from this hub URL and solve")
+    sil.add_argument("--trigger", help="Collection trigger tag to solve (default: latest)")
+    sil.add_argument("--token", default="", help="Hub bearer token")
     sil.add_argument("--simulate", action="store_true")
     psi.set_defaults(func=cmd_sigint, sigint_cmd=None, simulate=False,
-                     start=430.0, stop=440.0, file=None, scan=False, clear=False, tdoa=False)
+                     start=430.0, stop=440.0, file=None, scan=False, clear=False,
+                     tdoa=False, hub=None, trigger=None, token="")
 
     pau = sub.add_parser("automate", help="Automation: scheduled/looping RF tasks with alerting")
     ausub = pau.add_subparsers(dest="automate_cmd")
