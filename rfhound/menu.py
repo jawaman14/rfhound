@@ -156,6 +156,100 @@ def _menu_threats(cfg: Config, simulate: bool) -> None:
             console.error(str(exc))
 
 
+def _menu_sigint(cfg: Config, simulate: bool) -> None:
+    from .modules import sigint as sigint_mod
+    from .modules import gnss as gnss_mod
+    items = [
+        "Interference / jamming characterisation",
+        "Emitter catalogue (Electronic Order of Battle)",
+        "Multi-node geolocation (RSSI, simulated)",
+        "GNSS jamming / spoofing detection",
+        "Back",
+    ]
+    while True:
+        console.rule("SIGINT / EW-support (receive-only)")
+        for i, label in enumerate(items, 1):
+            console.print_(f"  {i}. {label}")
+        c = console.ask("Choose", default="5").strip().lower()
+        if c in ("5", "b", "back", ""):
+            return
+        try:
+            if c == "1":
+                lo = float(console.ask("Start MHz", default="433"))
+                hi = float(console.ask("Stop MHz", default="435"))
+                result = sweep_mod.sweep(cfg, lo, hi, simulate=simulate)
+                prof = sigint_mod.characterize_interference(
+                    [b.power_db for b in result.bins], result.noise_floor_db)
+                if prof.kind == "none":
+                    console.success(f"No jamming signature (occupancy {prof.occupancy:.0%}).")
+                else:
+                    console.error(f"Jamming type: {prof.kind.upper()} ({prof.confidence}%)")
+                    console.print_(f"  {prof.detail}")
+            elif c == "2":
+                cat = sigint_mod.EmitterCatalog()
+                emitters = cat.list()
+                if not emitters:
+                    console.warn("Empty catalogue — populate with: rfhound sigint emitters --scan")
+                else:
+                    rows = [[f"{e.freq_mhz:.4f}", e.itu, e.guess or "—", str(e.count)]
+                            for e in emitters]
+                    console.table(f"Emitter catalogue ({len(emitters)})",
+                                  ["Freq MHz", "ITU", "Likely", "Seen"], rows)
+            elif c == "3":
+                est = sigint_mod.geolocate(sigint_mod.simulate_reports())
+                if est.lat is None:
+                    console.warn(est.detail)
+                else:
+                    console.success(f"Estimated position: {est.lat}, {est.lon} "
+                                    f"({est.confidence}% · {est.n_receivers} receivers)")
+            elif c == "4":
+                scenario = console.ask("Scenario", default="spoofing",
+                                       choices=["nominal", "jamming", "spoofing"])
+                sim_map = {"nominal": gnss_mod.simulate_nominal,
+                           "jamming": gnss_mod.simulate_jamming,
+                           "spoofing": gnss_mod.simulate_spoofing}
+                report = gnss_mod.detect_gnss_interference(
+                    sim_map[scenario](), static=(scenario != "jamming"))
+                if report.status == "nominal":
+                    console.success("Nominal — no GNSS interference indicators.")
+                else:
+                    console.error(f"{report.status.upper()} suspected ({report.confidence}%)")
+                    for f in report.findings:
+                        tag = "JAM" if f.kind == "jamming" else "SPOOF"
+                        console.print_(f"  • [{tag}] {f.indicator}: {f.detail}")
+            else:
+                console.warn("Invalid choice.")
+        except (RFHoundError, ValueError) as exc:
+            console.error(str(exc))
+
+
+def _menu_recordings(cfg: Config, simulate: bool) -> None:
+    from .modules import recordings as rec_mod
+    console.rule("Captures & recordings")
+    recs = rec_mod.list_recordings(cfg.output_dir)
+    if recs:
+        rows = [[r.name, f"{r.freq_mhz:.4f}" if r.freq_mhz else "—",
+                 f"{r.seconds:.1f}s" if r.seconds else "—", r.guess or "—"]
+                for r in recs]
+        console.table(f"Recordings ({len(recs)})",
+                      ["Name", "Freq MHz", "Length", "Classification"], rows)
+    else:
+        console.print_("(no recordings yet)")
+    if simulate:
+        console.warn("Simulate mode — capture needs a HackRF. Use: rfhound capture <MHz> <secs>")
+        return
+    if console.confirm("Capture now?", default=False):
+        freq = float(console.ask("Frequency MHz", default="433.92"))
+        secs = int(console.ask("Seconds", default="5"))
+        name = console.ask("Name", default="") or None
+        from .modules import capture as capture_mod
+        try:
+            cap = capture_mod.capture_iq(cfg, freq, secs, name=name)
+            console.success(f"Captured to {cap.data_path}")
+        except RFHoundError as exc:
+            console.error(str(exc))
+
+
 def _menu_bands(cfg: Config) -> None:
     console.rule("Frequency knowledge base")
     console.print_("Categories: " + ", ".join(sorted({b.category for b in bandplan.BANDS})))
@@ -240,7 +334,9 @@ MENU = [
     ("Spectrum sweep (+ auto-identify)", lambda c, s: _menu_sweep(c, s)),
     ("Identify a frequency / protocol", lambda c, s: _menu_identify(c, s)),
     ("Threat detection", lambda c, s: _menu_threats(c, s)),
+    ("SIGINT / EW tools (+ GNSS spoof detect)", lambda c, s: _menu_sigint(c, s)),
     ("Protocol decoders", lambda c, s: _menu_decoders(c, s)),
+    ("Captures & recordings", lambda c, s: _menu_recordings(c, s)),
     ("Frequency knowledge base", lambda c, s: _menu_bands(c)),
     ("Bookmarks", lambda c, s: _menu_bookmarks(c)),
     ("Automation console", lambda c, s: _menu_automate(c)),

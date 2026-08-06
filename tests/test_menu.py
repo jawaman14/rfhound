@@ -49,3 +49,18 @@ def test_menu_threats_submenu(monkeypatch, capsys):
     menu.run_menu(Config(simulate_mode=True))
     out = capsys.readouterr().out
     assert "Rogue-BTS" in out or "likelihood" in out
+
+
+def test_menu_sigint_and_gnss():
+    # The SIGINT submenu and its GNSS detector must be reachable from the menu.
+    labels = [m[0] for m in menu.MENU]
+    assert any("SIGINT" in lbl for lbl in labels)
+    assert any("recordings" in lbl.lower() for lbl in labels)
+
+
+def test_menu_sigint_gnss_spoofing(monkeypatch, capsys):
+    # 5 = SIGINT; 4 = GNSS; scenario spoofing; 5 = Back; Quit.
+    _feed(monkeypatch, ["5", "4", "spoofing", "5", str(len(menu.MENU))])
+    menu.run_menu(Config(simulate_mode=True))
+    out = capsys.readouterr().out
+    assert "SPOOFING" in out
