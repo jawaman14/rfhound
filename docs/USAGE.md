@@ -130,7 +130,8 @@ hardware range, or without the per-command `--authorized` flag.
 
 ```bash
 rfhound web                       # http://127.0.0.1:8000
-rfhound web --host 0.0.0.0 --port 9000 --open
+rfhound web --host 0.0.0.0 --port 9000 --token   # require a generated token
+rfhound web --token s3cr3t                        # require a specific token
 rfhound web --simulate            # demo with no hardware
 ```
 
@@ -147,8 +148,25 @@ Every panel is backed by a JSON endpoint you can consume directly:
 | `GET /api/defense/spoof/adsb` · `/ais` | spoof-detection findings |
 | `GET /api/bands` · `/api/decoders` | knowledge base & decoder recipes |
 
-Bind to `127.0.0.1` (default) unless you intend to expose it; put it behind a
-reverse proxy with auth if you serve it on a network.
+**Authentication.** By default the dashboard binds to `127.0.0.1` with no token
+(fine for a local session). To expose it on a network, gate the API with a token:
+
+```bash
+rfhound web --host 0.0.0.0 --token           # generates & prints a token
+rfhound web --host 0.0.0.0 --token s3cr3t     # use your own
+```
+
+When `--host` is not localhost a token is generated automatically if you don't
+pass one. With a token set, every `/api/…` request must present it — as a
+`Authorization: Bearer <token>` header, an `X-RFHound-Token` header, a `?token=`
+query param, or the `rfh_token` cookie. Open the printed
+`http://…/?token=<token>` link and the dashboard captures the token into
+`sessionStorage` and sends it as a bearer header on every call (stripping it from
+the URL). The HTML shell carries no data and is always served; only the data API
+is gated. For production, still prefer a reverse proxy (TLS + your own SSO) in
+front of the token. Responses set `X-Content-Type-Options`, `X-Frame-Options`,
+and `Referrer-Policy`. The server is receive-only — no token, cookie, or proxy
+ever unlocks a transmit path, because there isn't one.
 
 ## HackRF hardware options
 

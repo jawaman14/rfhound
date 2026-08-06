@@ -194,7 +194,21 @@
 <script>
 const $ = s => document.querySelector(s);
 const sim = () => $('#sim').checked ? '1' : '0';
-async function api(p){ const r = await fetch(p); if(!r.ok) throw new Error(r.status); return r.json(); }
+// Capture an API token from ?token=… (once), then keep it in sessionStorage and
+// send it as a bearer header so it never lingers in later request URLs.
+(function(){ try{
+  const t = new URLSearchParams(location.search).get('token');
+  if(t){ sessionStorage.setItem('rfh_token', t);
+    history.replaceState(null,'',location.pathname); }
+}catch(e){} })();
+async function api(p){
+  const tok = sessionStorage.getItem('rfh_token');
+  const opts = tok ? {headers:{'Authorization':'Bearer '+tok}} : {};
+  const r = await fetch(p, opts);
+  if(r.status===401){ throw new Error('unauthorized — append ?token=… to the URL'); }
+  if(!r.ok) throw new Error(r.status);
+  return r.json();
+}
 function setKpi(id, val, cls){ const e=$(id); e.textContent=val; e.className='v '+(cls||''); }
 
 // clock

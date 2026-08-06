@@ -125,3 +125,64 @@ def test_404(base_url):
         assert False
     except urllib.error.HTTPError as e:
         assert e.code == 404
+
+
+def test_security_headers(base_url):
+    with urllib.request.urlopen(base_url + "/api/version", timeout=5) as r:
+        assert r.headers.get("X-Content-Type-Options") == "nosniff"
+        assert r.headers.get("X-Frame-Options") == "DENY"
+
+
+@pytest.fixture()
+def auth_url():
+    state = web.build_app_state(Config(), force_simulate=True, token="s3cr3t")
+    handler = web._make_handler(state)
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    port = httpd.server_address[1]
+    t = threading.Thread(target=httpd.serve_forever, daemon=True)
+    t.start()
+    yield f"http://127.0.0.1:{port}"
+    httpd.shutdown()
+    httpd.server_close()
+
+
+def test_auth_required_401(auth_url):
+    try:
+        get(auth_url + "/api/status")
+        assert False, "expected 401"
+    except urllib.error.HTTPError as e:
+        assert e.code == 401
+
+
+def test_auth_html_shell_always_served(auth_url):
+    # The HTML carries no data, so it must load even without a token.
+    with urllib.request.urlopen(auth_url + "/", timeout=5) as r:
+        assert r.status == 200
+
+
+def test_auth_bearer_header(auth_url):
+    req = urllib.request.Request(auth_url + "/api/status",
+                                 headers={"Authorization": "Bearer s3cr3t"})
+    with urllib.request.urlopen(req, timeout=5) as r:
+        assert r.status == 200
+
+
+def test_auth_query_param(auth_url):
+    code, data = get(auth_url + "/api/status?token=s3cr3t")
+    assert code == 200 and "tools" in data
+
+
+def test_auth_wrong_token_401(auth_url):
+    try:
+        get(auth_url + "/api/status?token=nope")
+        assert False, "expected 401"
+    except urllib.error.HTTPError as e:
+        assert e.code == 401
+
+
+def test_token_ok_constant_time():
+    st = web.build_app_state(Config(), token="abc")
+    assert st.token_ok("abc") is True
+    assert st.token_ok("abd") is False
+    assert st.token_ok(None) is False
+    assert web.build_app_state(Config(), token=None).token_ok(None) is True

@@ -811,11 +811,18 @@ def cmd_web(args: argparse.Namespace, cfg: Config) -> int:
     force_sim = args.simulate or cfg.simulate_mode or not device.is_present()
     if force_sim and not args.simulate:
         console.warn("No HackRF detected — dashboard will run in SIMULATE mode.")
+    token = args.token
+    if token == "auto" or (token is None and args.host not in web_server._LOOPBACK):
+        import secrets
+        token = secrets.token_urlsafe(18)
+        console.info(f"Generated dashboard token: {token}")
     url = f"http://{args.host}:{args.port}"
+    if token:
+        url += f"/?token={token}"
     if args.open:
         import webbrowser
         webbrowser.open(url)
-    web_server.serve(cfg, host=args.host, port=args.port, force_simulate=force_sim)
+    web_server.serve(cfg, host=args.host, port=args.port, force_simulate=force_sim, token=token)
     return 0
 
 
@@ -1274,6 +1281,9 @@ def build_parser() -> argparse.ArgumentParser:
     pw.add_argument("--port", type=int, default=8000, help="Port (default 8000)")
     pw.add_argument("--simulate", action="store_true", help="Force simulate mode")
     pw.add_argument("--open", action="store_true", help="Open a browser window")
+    pw.add_argument("--token", nargs="?", const="auto", default=None,
+                    help="Require this API token (or 'auto'/no value to generate one). "
+                         "Auto-generated when binding to a non-localhost host.")
     pw.set_defaults(func=cmd_web)
 
     pb = sub.add_parser("bands", help="Browse the frequency knowledge base")

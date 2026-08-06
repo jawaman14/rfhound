@@ -11,8 +11,10 @@ every panel in the UI is backed by a ``/api/...`` endpoint returning JSON.
 
 from __future__ import annotations
 
+import hmac
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.cookies import SimpleCookie
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
@@ -27,6 +29,7 @@ from ..modules import sweep as sweep_mod
 from ..modules import toolbox as toolbox_mod
 
 _DASHBOARD = Path(__file__).with_name("dashboard.html")
+_LOOPBACK = {"127.0.0.1", "::1", "localhost"}
 
 
 # --------------------------------------------------------------------------- #
@@ -191,9 +194,10 @@ def decoders_dict() -> dict:
 # App state + request routing
 # --------------------------------------------------------------------------- #
 class AppState:
-    def __init__(self, cfg: Config, *, force_simulate: bool = False):
+    def __init__(self, cfg: Config, *, force_simulate: bool = False, token: str | None = None):
         self.cfg = cfg
         self.force_simulate = force_simulate
+        self.token = token or None  # empty string => no auth
 
     def wants_simulate(self, qs: dict) -> bool:
         if self.force_simulate:
@@ -201,9 +205,18 @@ class AppState:
         val = qs.get("simulate", ["0"])[0]
         return val in ("1", "true", "yes")
 
+    def token_ok(self, presented: str | None) -> bool:
+        """Constant-time check of a presented API token."""
+        if not self.token:
+            return True
+        if not presented:
+            return False
+        return hmac.compare_digest(str(presented), self.token)
 
-def build_app_state(cfg: Config | None = None, *, force_simulate: bool = False) -> AppState:
-    return AppState(cfg or load_config(), force_simulate=force_simulate)
+
+def build_app_state(cfg: Config | None = None, *, force_simulate: bool = False,
+                    token: str | None = None) -> AppState:
+    return AppState(cfg or load_config(), force_simulate=force_simulate, token=token)
 
 
 def _make_handler(state: AppState):
@@ -213,11 +226,18 @@ def _make_handler(state: AppState):
         def log_message(self, *args):  # keep the console quiet
             pass
 
+        def _security_headers(self):
+            # Harmless static/JSON surface, but set defensive headers anyway.
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Referrer-Policy", "no-referrer")
+            self.send_header("X-Frame-Options", "DENY")
+
         def _send_json(self, obj, code=200):
             body = json.dumps(obj).encode()
             self.send_response(code)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
+            self._security_headers()
             self.end_headers()
             self.wfile.write(body)
 
@@ -229,8 +249,30 @@ def _make_handler(state: AppState):
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))
+            self._security_headers()
             self.end_headers()
             self.wfile.write(body)
+
+        def _presented_token(self, qs):
+            """Pull an API token from the Authorization header, X-RFHound-Token,
+            a query param, or the rfh_token cookie (in that order)."""
+            auth = self.headers.get("Authorization", "")
+            if auth.startswith("Bearer "):
+                return auth[7:].strip()
+            hdr = self.headers.get("X-RFHound-Token")
+            if hdr:
+                return hdr.strip()
+            if qs.get("token"):
+                return qs["token"][0]
+            raw = self.headers.get("Cookie")
+            if raw:
+                try:
+                    ck = SimpleCookie(raw)
+                    if "rfh_token" in ck:
+                        return ck["rfh_token"].value
+                except Exception:
+                    pass
+            return None
 
         def do_GET(self):
             parsed = urlparse(self.path)
@@ -238,6 +280,10 @@ def _make_handler(state: AppState):
             qs = parse_qs(parsed.query)
             sim = state.wants_simulate(qs)
             cfg = state.cfg
+            # Gate the data API behind the token when one is configured. The
+            # HTML shell itself carries no data, so it's always served.
+            if path.startswith("/api/") and not state.token_ok(self._presented_token(qs)):
+                return self._send_json({"error": "unauthorized"}, code=401)
             try:
                 if path in ("/", "/index.html"):
                     return self._send_html()
@@ -294,14 +340,25 @@ def _make_handler(state: AppState):
 
 
 def serve(cfg: Config | None = None, *, host: str = "127.0.0.1", port: int = 8000,
-          force_simulate: bool = False) -> None:
-    """Start the dashboard/API server (blocking)."""
-    state = build_app_state(cfg, force_simulate=force_simulate)
+          force_simulate: bool = False, token: str | None = None) -> None:
+    """Start the dashboard/API server (blocking).
+
+    When ``token`` is set, every ``/api/…`` request must present it (Bearer
+    header, ``X-RFHound-Token``, ``?token=``, or the ``rfh_token`` cookie).
+    """
+    state = build_app_state(cfg, force_simulate=force_simulate, token=token)
     handler = _make_handler(state)
     httpd = ThreadingHTTPServer((host, port), handler)
     actual = httpd.server_address[1]
-    console.success(f"RFHound dashboard on http://{host}:{actual}")
+    exposed = host not in _LOOPBACK
+    if exposed and not token:
+        console.warn(f"Binding to {host} exposes the dashboard beyond this host with NO "
+                     "auth. Pass --token to require one, or bind to 127.0.0.1.")
+    console.success(f"RFHound dashboard on http://{host}:{actual}"
+                    + ("  (token required)" if token else ""))
     console.print_("  REST API under /api/…  ·  receive-only  ·  Ctrl-C to stop")
+    if token and exposed:
+        console.print_(f"  Authenticated link: http://{host}:{actual}/?token={token}")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
