@@ -186,3 +186,71 @@ def test_token_ok_constant_time():
     assert st.token_ok("abd") is False
     assert st.token_ok(None) is False
     assert web.build_app_state(Config(), token=None).token_ok(None) is True
+
+
+def _post(url, body, token=None):
+    data = json.dumps(body).encode()
+    headers = {"Content-Type": "application/json"}
+    if token:
+        headers["Authorization"] = "Bearer " + token
+    req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+    with urllib.request.urlopen(req, timeout=5) as r:
+        return r.status, json.loads(r.read().decode())
+
+
+@pytest.fixture()
+def bm_url(tmp_path, monkeypatch):
+    # Isolate the config file so the test never touches the real one.
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    state = web.build_app_state(Config(), force_simulate=True)
+    handler = web._make_handler(state)
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    port = httpd.server_address[1]
+    t = threading.Thread(target=httpd.serve_forever, daemon=True)
+    t.start()
+    yield f"http://127.0.0.1:{port}"
+    httpd.shutdown()
+    httpd.server_close()
+
+
+def test_bookmark_add_and_delete(bm_url):
+    code, data = _post(bm_url + "/api/bookmarks/add",
+                       {"name": "myfob", "freq_mhz": 433.92, "note": "car"})
+    assert code == 200
+    assert any(b["name"] == "myfob" and b["freq_mhz"] == 433.92 for b in data["bookmarks"])
+    # It should also show up on the GET endpoint.
+    _, got = get(bm_url + "/api/bookmarks")
+    assert any(b["name"] == "myfob" for b in got["bookmarks"])
+    # Delete it.
+    code, data = _post(bm_url + "/api/bookmarks/delete", {"name": "myfob"})
+    assert code == 200 and data["removed"] == 1
+    assert not any(b["name"] == "myfob" for b in data["bookmarks"])
+
+
+def test_bookmark_add_validation(bm_url):
+    for bad in [{"name": "", "freq_mhz": 100}, {"name": "x", "freq_mhz": -1},
+                {"name": "x", "freq_mhz": "nan-ish"}]:
+        try:
+            _post(bm_url + "/api/bookmarks/add", bad)
+            assert False, "expected 400"
+        except urllib.error.HTTPError as e:
+            assert e.code == 400
+
+
+def test_bookmark_add_requires_token():
+    state = web.build_app_state(Config(), force_simulate=True, token="tok")
+    handler = web._make_handler(state)
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    port = httpd.server_address[1]
+    t = threading.Thread(target=httpd.serve_forever, daemon=True)
+    t.start()
+    url = f"http://127.0.0.1:{port}"
+    try:
+        try:
+            _post(url + "/api/bookmarks/add", {"name": "x", "freq_mhz": 100})
+            assert False, "expected 401"
+        except urllib.error.HTTPError as e:
+            assert e.code == 401
+    finally:
+        httpd.shutdown()
+        httpd.server_close()

@@ -11,9 +11,15 @@
     --ok:#3fd07a; --warn:#e3b341; --bad:#ff5c6c; --grid:#16202f;
     --shadow:0 6px 24px rgba(0,0,0,.35);
   }
+  /* Light palette — applied automatically when the OS prefers light and no
+     manual theme is set, and always when data-theme="light" is forced. */
+  :root[data-theme="light"]{
+    --bg:#eef2f7;--bg2:#e7edf5;--panel:#fff;--panel2:#f2f6fb;--border:#d6deea;
+    --text:#141b26;--dim:#5a6b82;--grid:#e6ecf5;--shadow:0 6px 20px rgba(20,40,80,.08)}
   @media (prefers-color-scheme: light){
-    :root{--bg:#eef2f7;--bg2:#e7edf5;--panel:#fff;--panel2:#f2f6fb;--border:#d6deea;
-          --text:#141b26;--dim:#5a6b82;--grid:#e6ecf5;--shadow:0 6px 20px rgba(20,40,80,.08)}
+    :root:not([data-theme="dark"]):not([data-theme="light"]){
+      --bg:#eef2f7;--bg2:#e7edf5;--panel:#fff;--panel2:#f2f6fb;--border:#d6deea;
+      --text:#141b26;--dim:#5a6b82;--grid:#e6ecf5;--shadow:0 6px 20px rgba(20,40,80,.08)}
   }
   *{box-sizing:border-box}
   html,body{margin:0}
@@ -62,15 +68,34 @@
       padding:8px 13px;font-weight:700;cursor:pointer;font-size:13px}
   button:hover{filter:brightness(1.08)} button:active{transform:translateY(1px)}
   button.ghost{background:var(--panel2);color:var(--text);border:1px solid var(--border)}
+  /* Scope stays dark in both themes — conventional for spectrum/waterfall and
+     keeps the trace legible regardless of the surrounding UI theme. */
   canvas{width:100%;background:#04070d;border-radius:10px;display:block;border:1px solid var(--border)}
-  .smeter{display:flex;align-items:center;gap:10px;margin:4px 0 10px}
+  .smeter{display:flex;align-items:center;gap:10px;margin:4px 0 2px}
   .smeter-label{font-size:10px;font-weight:800;letter-spacing:1px;color:var(--dim)}
-  .smeter-track{flex:1;height:12px;border-radius:6px;background:var(--panel2);border:1px solid var(--border);overflow:hidden}
-  .smeter-fill{height:100%;width:0;border-radius:6px;transition:width .3s ease,background .3s ease}
-  .smeter-val{font-size:12px;font-weight:700;min-width:56px;text-align:right}
-  .bm-row{display:flex;justify-content:space-between;padding:7px 4px;border-bottom:1px solid var(--border);cursor:pointer}
+  .smeter-track{flex:1;height:14px;border-radius:7px;background:var(--panel2);border:1px solid var(--border);
+      overflow:hidden;position:relative}
+  .smeter-fill{height:100%;width:0;border-radius:7px;transition:width .25s ease,background .25s ease}
+  .smeter-peak{position:absolute;top:0;bottom:0;width:2px;background:var(--text);opacity:.85;
+      transition:left .25s ease;pointer-events:none}
+  .smeter-val{font-size:12px;font-weight:700;min-width:72px;text-align:right;font-variant-numeric:tabular-nums}
+  .smeter-scale{display:flex;justify-content:space-between;margin:0 76px 10px 62px;
+      font-size:9px;color:var(--dim);font-weight:700;letter-spacing:.3px}
+  .smeter-scale span{position:relative}
+  .bm-row{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:7px 4px;
+      border-bottom:1px solid var(--border)}
   .bm-row:hover{background:var(--panel2)}
-  .bm-row .f{color:var(--accent);font-weight:700}
+  .bm-row .bm-tune{flex:1;cursor:pointer;display:flex;justify-content:space-between;gap:10px;align-items:center}
+  .bm-row .f{color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums}
+  .bm-del{background:transparent;border:0;color:var(--dim);font-size:15px;line-height:1;cursor:pointer;
+      padding:2px 6px;border-radius:6px}
+  .bm-del:hover{background:var(--bad);color:#fff}
+  .bm-add{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;align-items:center}
+  .bm-add input[type=text]{width:120px} .bm-add input[type=number]{width:92px}
+  .iconbtn{background:var(--panel);border:1px solid var(--border);color:var(--text);border-radius:8px;
+      padding:5px 10px;font-size:15px;font-weight:700;cursor:pointer;line-height:1}
+  .iconbtn:hover{background:var(--panel2)}
+  button.mini{padding:5px 10px;font-size:12px}
   table{width:100%;border-collapse:collapse;font-size:13px}
   th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--border)}
   th{color:var(--dim);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.5px}
@@ -83,6 +108,11 @@
   .section{scroll-margin-top:16px}
   footer{color:var(--dim);font-size:11px;margin-top:22px;border-top:1px solid var(--border);padding-top:12px}
 </style>
+<script>
+  // Apply the saved theme before first paint (avoids a light/dark flash).
+  try{var _t=localStorage.getItem('rfh_theme');
+    if(_t==='dark'||_t==='light')document.documentElement.setAttribute('data-theme',_t);}catch(e){}
+</script>
 </head>
 <body>
 <div class="app">
@@ -105,6 +135,7 @@
         <div class="sub" id="clock"></div>
       </div>
       <span class="grow"></span>
+      <button class="iconbtn" id="themeBtn" title="Theme: auto / dark / light">🖥️</button>
       <span class="switch"><input type="checkbox" id="sim"> Simulate</span>
       <span class="pill" id="devPill">device: …</span>
       <span class="pill" id="verPill">v…</span>
@@ -129,10 +160,16 @@
         <span class="switch"><input type="checkbox" id="autoSweep"> Auto</span>
         <span class="muted" id="sweepInfo"></span>
       </div>
-      <div class="smeter" title="Strongest signal in view (SNR over the noise floor)">
+      <div class="smeter" title="Strongest signal in view (approx. S-units from SNR over the noise floor)">
         <span class="smeter-label">S-METER</span>
-        <div class="smeter-track"><div class="smeter-fill" id="smeterFill"></div></div>
-        <span class="smeter-val" id="smeterVal">— dB</span>
+        <div class="smeter-track">
+          <div class="smeter-fill" id="smeterFill"></div>
+          <div class="smeter-peak" id="smeterPeak"></div>
+        </div>
+        <span class="smeter-val" id="smeterVal">—</span>
+      </div>
+      <div class="smeter-scale" aria-hidden="true">
+        <span>S1</span><span>S3</span><span>S5</span><span>S7</span><span>S9</span><span>+20</span><span>+40</span>
       </div>
       <canvas id="spectrum-cv" height="150"></canvas>
       <canvas id="waterfall" height="130" style="margin-top:8px"></canvas>
@@ -164,7 +201,15 @@
       <!-- Bookmarks -->
       <div class="card section" id="bookmarks">
         <h2>Bookmarks</h2>
-        <div id="bmOut" class="scroll"><p class="muted">Loading… (add with <code>rfhound bookmark add</code>)</p></div>
+        <div id="bmOut" class="scroll"><p class="muted">Loading…</p></div>
+        <div class="bm-add">
+          <input type="text" id="bmName" placeholder="name">
+          <input type="number" id="bmFreq" placeholder="MHz" step="0.001">
+          <input type="text" id="bmNote" placeholder="note (optional)">
+          <button class="mini" id="bmAddBtn">Add</button>
+          <button class="mini ghost" id="bmFromCenter" title="Bookmark the current sweep centre">★ centre</button>
+        </div>
+        <div class="muted" id="bmMsg" style="margin-top:6px"></div>
       </div>
 
       <!-- Bands -->
@@ -201,15 +246,42 @@ const sim = () => $('#sim').checked ? '1' : '0';
   if(t){ sessionStorage.setItem('rfh_token', t);
     history.replaceState(null,'',location.pathname); }
 }catch(e){} })();
-async function api(p){
+function authHeaders(extra){
   const tok = sessionStorage.getItem('rfh_token');
-  const opts = tok ? {headers:{'Authorization':'Bearer '+tok}} : {};
-  const r = await fetch(p, opts);
+  const h = Object.assign({}, extra||{});
+  if(tok) h['Authorization']='Bearer '+tok;
+  return h;
+}
+async function api(p){
+  const r = await fetch(p, {headers:authHeaders()});
   if(r.status===401){ throw new Error('unauthorized — append ?token=… to the URL'); }
   if(!r.ok) throw new Error(r.status);
   return r.json();
 }
+async function post(p, body){
+  const r = await fetch(p, {method:'POST',
+    headers:authHeaders({'Content-Type':'application/json'}), body:JSON.stringify(body||{})});
+  const data = await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(data.error || r.status);
+  return data;
+}
 function setKpi(id, val, cls){ const e=$(id); e.textContent=val; e.className='v '+(cls||''); }
+
+// ---- theme toggle: auto → dark → light, persisted ----
+const THEMES=['auto','dark','light'], THEME_ICON={auto:'🖥️',dark:'🌙',light:'☀️'};
+function applyTheme(t){
+  if(t==='auto') document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.setAttribute('data-theme',t);
+  const b=$('#themeBtn'); if(b){b.textContent=THEME_ICON[t]; b.title='Theme: '+t+' (click to change)';}
+}
+function initTheme(){
+  let t=localStorage.getItem('rfh_theme'); if(!THEMES.includes(t)) t='auto';
+  applyTheme(t);
+  $('#themeBtn').onclick=()=>{
+    t=THEMES[(THEMES.indexOf(t)+1)%THEMES.length];
+    localStorage.setItem('rfh_theme',t); applyTheme(t);
+  };
+}
 
 // clock
 setInterval(()=>{ $('#clock').textContent = new Date().toUTCString().replace('GMT','UTC'); }, 1000);
@@ -225,7 +297,7 @@ function heat(v){const r=Math.max(0,Math.min(255,255*(v-0.5)*2)),g=Math.max(0,Ma
 function drawSpectrum(d){
   const w=fit(specCv),h=specCv.height,ctx=specCv.getContext('2d');ctx.clearRect(0,0,w,h);
   const s=d.spectrum,min=d.min_db-3,max=d.max_db+3,rng=Math.max(1,max-min);
-  ctx.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--grid');ctx.lineWidth=1;
+  ctx.strokeStyle='#16202f';ctx.lineWidth=1;  // fixed: scope canvas is always dark
   for(let i=0;i<=4;i++){const y=h*i/4;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}
   ctx.beginPath();ctx.moveTo(0,h);
   for(let i=0;i<s.length;i++){const x=w*i/(s.length-1),y=h-((s[i]-min)/rng)*h;ctx.lineTo(x,y);}
@@ -244,12 +316,37 @@ function drawWaterfall(){
       img.data[o]=c[0];img.data[o+1]=c[1];img.data[o+2]=c[2];img.data[o+3]=255;}}
   ctx.putImageData(img,0,0);
 }
+// S-meter: map SNR-over-floor to an approximate S-unit reading. The scale runs
+// S1..S9 across the first ~48 dB (6 dB per S-unit) then +20/+40 over-S9, so the
+// bar and the S1 S3 S5 S7 S9 +20 +40 ticks line up. Absolute dBm isn't available
+// (receiver isn't calibrated), so this is a relative strength indicator.
+let smeterPeakPct=0, smeterPeakDecay=null;
+function snrToSUnit(snr){
+  if(snr>=54) return 'S9+'+Math.round((snr-54)/1)*1+'dB';   // over S9
+  if(snr>=48) return 'S9+'+Math.round(snr-48)+'dB';
+  return 'S'+Math.max(1,Math.min(9,Math.round(snr/6)));
+}
+function snrToPct(snr){ return Math.max(2,Math.min(100,snr/60*100)); } // 0–60 dB across the bar
 function updateSMeter(d){
-  const snr=Math.max(0,(d.max_db??d.noise_floor_db)-d.noise_floor_db); // dB over floor
-  const pct=Math.max(3,Math.min(100,snr/60*100));                       // 0–60 dB scale
+  const snr=Math.max(0,(d.max_db??d.noise_floor_db)-d.noise_floor_db);
+  const pct=snrToPct(snr);
   const col=snr>35?'var(--bad)':snr>20?'var(--warn)':'var(--ok)';
   const fill=$('#smeterFill'); fill.style.width=pct+'%'; fill.style.background=col;
-  $('#smeterVal').textContent=snr.toFixed(0)+' dB';
+  // Strongest peak frequency, if any.
+  let fTxt=''; if(d.peaks&&d.peaks.length){
+    const top=d.peaks.reduce((a,b)=>b.power_db>a.power_db?b:a);
+    fTxt=' · '+top.freq_mhz.toFixed(3)+' MHz';
+  }
+  $('#smeterVal').textContent=snrToSUnit(snr)+' ('+snr.toFixed(0)+' dB)'+fTxt;
+  // Peak-hold marker with slow decay.
+  if(pct>=smeterPeakPct){ smeterPeakPct=pct; }
+  $('#smeterPeak').style.left='calc('+smeterPeakPct+'% - 1px)';
+  if(smeterPeakDecay) clearInterval(smeterPeakDecay);
+  smeterPeakDecay=setInterval(()=>{
+    smeterPeakPct=Math.max(pct,smeterPeakPct-1.5);
+    $('#smeterPeak').style.left='calc('+smeterPeakPct+'% - 1px)';
+    if(smeterPeakPct<=pct){ clearInterval(smeterPeakDecay); smeterPeakDecay=null; }
+  },200);
 }
 async function doSweep(){
   try{const d=await api(`/api/sweep?start=${$('#fStart').value}&stop=${$('#fStop').value}&simulate=${sim()}`);
@@ -323,13 +420,35 @@ function tuneTo(freq){
   $('#fStart').value=(f-1).toFixed(2); $('#fStop').value=(f+1).toFixed(2); doSweep();
   document.getElementById('spectrum').scrollIntoView({behavior:'smooth',block:'start'});
 }
-async function loadBookmarks(){
-  const bm=(await api('/api/bookmarks')).bookmarks||[];
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function renderBookmarks(bm){
   const el=$('#bmOut');
-  if(!bm.length){el.innerHTML='<p class="muted">No bookmarks. Add with <code>rfhound bookmark add &lt;name&gt; &lt;MHz&gt;</code></p>';return;}
+  if(!bm.length){el.innerHTML='<p class="muted">No bookmarks yet — add one below, or ★ the sweep centre.</p>';return;}
   el.innerHTML=bm.sort((a,b)=>(a.freq_mhz||0)-(b.freq_mhz||0)).map(b=>
-    `<div class="bm-row" data-f="${b.freq_mhz}" title="Click to tune"><span>${b.name}${b.note?` <span class="muted">· ${b.note}</span>`:''}</span><span class="f">${(+b.freq_mhz).toFixed(4)} MHz</span></div>`).join('');
-  el.querySelectorAll('.bm-row').forEach(r=>r.onclick=()=>tuneTo(r.dataset.f));
+    `<div class="bm-row"><div class="bm-tune" data-f="${b.freq_mhz}" title="Click to tune">`+
+    `<span>${esc(b.name)}${b.note?` <span class="muted">· ${esc(b.note)}</span>`:''}</span>`+
+    `<span class="f">${(+b.freq_mhz).toFixed(4)} MHz</span></div>`+
+    `<button class="bm-del" data-name="${esc(b.name)}" title="Delete">✕</button></div>`).join('');
+  el.querySelectorAll('.bm-tune').forEach(r=>r.onclick=()=>tuneTo(r.dataset.f));
+  el.querySelectorAll('.bm-del').forEach(x=>x.onclick=()=>delBookmark(x.dataset.name));
+}
+async function loadBookmarks(){ renderBookmarks((await api('/api/bookmarks')).bookmarks||[]); }
+function bmMsg(t,bad){const e=$('#bmMsg');e.textContent=t;e.style.color=bad?'var(--bad)':'var(--dim)';
+  if(t)setTimeout(()=>{e.textContent='';},2500);}
+async function addBookmark(){
+  const name=$('#bmName').value.trim(), freq=parseFloat($('#bmFreq').value), note=$('#bmNote').value.trim();
+  if(!name||!(freq>0)){bmMsg('Enter a name and a positive frequency.',true);return;}
+  try{ renderBookmarks((await post('/api/bookmarks/add',{name,freq_mhz:freq,note})).bookmarks);
+    $('#bmName').value='';$('#bmFreq').value='';$('#bmNote').value=''; bmMsg('Saved “'+name+'”.'); }
+  catch(e){ bmMsg('Error: '+e.message,true); }
+}
+async function delBookmark(name){
+  try{ renderBookmarks((await post('/api/bookmarks/delete',{name})).bookmarks); bmMsg('Removed “'+name+'”.'); }
+  catch(e){ bmMsg('Error: '+e.message,true); }
+}
+function bookmarkCenter(){
+  const c=((parseFloat($('#fStart').value)+parseFloat($('#fStop').value))/2);
+  if(c>0){ $('#bmFreq').value=c.toFixed(3); if(!$('#bmName').value) $('#bmName').value='mark '+c.toFixed(3); }
 }
 async function refreshKpis(){ try{await doDrone();await doAdsb();await doImsi();}catch(e){} }
 
@@ -346,8 +465,13 @@ async function doAt(){
 }
 $('#atBtn').onclick=doAt;
 $('#bandSearch').oninput=renderBands;
+$('#bmAddBtn').onclick=addBookmark;
+$('#bmFromCenter').onclick=bookmarkCenter;
+$('#bmFreq').addEventListener('keydown',e=>{if(e.key==='Enter')addBookmark();});
+$('#bmNote').addEventListener('keydown',e=>{if(e.key==='Enter')addBookmark();});
 let autoTimer=null;$('#autoSweep').onchange=e=>{if(e.target.checked)autoTimer=setInterval(doSweep,1500);else clearInterval(autoTimer);};
 window.addEventListener('resize',drawWaterfall);
+initTheme();
 loadStatus().then(loadBands).then(loadBookmarks).then(doSweep).then(doRecon).then(refreshKpis).catch(e=>console.error(e));
 </script>
 </body>

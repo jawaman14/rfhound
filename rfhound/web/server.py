@@ -19,7 +19,7 @@ from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
 from .. import __version__, bandplan, console, device, proc
-from ..config import Config, load_config
+from ..config import Config, load_config, save_config
 from ..modules import cellular as cellular_mod
 from ..modules import classify as classify_mod
 from ..modules import decode as decode_mod
@@ -180,6 +180,33 @@ def at_dict(freq_mhz: float) -> dict:
             "gnuradio": tb.gnuradio, "commands": tb.commands}
 
 
+def add_bookmark(cfg: Config, body: dict) -> dict:
+    """Add/replace a bookmark and persist config. Raises ValueError on bad input."""
+    name = str(body.get("name", "")).strip()
+    if not name:
+        raise ValueError("name is required")
+    try:
+        freq = float(body.get("freq_mhz"))
+    except (TypeError, ValueError):
+        raise ValueError("freq_mhz must be a number")
+    if freq <= 0:
+        raise ValueError("freq_mhz must be positive")
+    note = str(body.get("note", "")).strip()
+    cfg.bookmarks = [b for b in cfg.bookmarks if b.get("name") != name]
+    cfg.bookmarks.append({"name": name, "freq_mhz": freq, "note": note})
+    save_config(cfg)
+    return {"bookmarks": cfg.bookmarks}
+
+
+def delete_bookmark(cfg: Config, body: dict) -> dict:
+    """Remove a bookmark by name and persist config."""
+    name = str(body.get("name", "")).strip()
+    before = len(cfg.bookmarks)
+    cfg.bookmarks = [b for b in cfg.bookmarks if b.get("name") != name]
+    save_config(cfg)
+    return {"bookmarks": cfg.bookmarks, "removed": before - len(cfg.bookmarks)}
+
+
 def decoders_dict() -> dict:
     out = []
     for r in decode_mod.list_recipes():
@@ -334,6 +361,37 @@ def _make_handler(state: AppState):
                          "category": m.category} for m in matches[:8]]})
                 return self._send_json({"error": "not found", "path": path}, code=404)
             except Exception as exc:  # never leak a stack trace to the client
+                return self._send_json({"error": str(exc)}, code=500)
+
+        def _read_json_body(self):
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+            except (TypeError, ValueError):
+                length = 0
+            raw = self.rfile.read(length) if length else b""
+            try:
+                return json.loads(raw or b"{}")
+            except ValueError:
+                return None
+
+        def do_POST(self):
+            parsed = urlparse(self.path)
+            path = parsed.path
+            qs = parse_qs(parsed.query)
+            if not state.token_ok(self._presented_token(qs)):
+                return self._send_json({"error": "unauthorized"}, code=401)
+            body = self._read_json_body()
+            if body is None or not isinstance(body, dict):
+                return self._send_json({"error": "invalid JSON body"}, code=400)
+            try:
+                if path == "/api/bookmarks/add":
+                    return self._send_json(add_bookmark(state.cfg, body))
+                if path == "/api/bookmarks/delete":
+                    return self._send_json(delete_bookmark(state.cfg, body))
+                return self._send_json({"error": "not found", "path": path}, code=404)
+            except ValueError as exc:
+                return self._send_json({"error": str(exc)}, code=400)
+            except Exception as exc:
                 return self._send_json({"error": str(exc)}, code=500)
 
     return Handler

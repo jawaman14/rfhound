@@ -10,6 +10,13 @@ no-Electronic-Attack guarantees are unchanged and test-enforced. **243 tests**,
 flake8-clean.
 
 ### Added
+- **Dashboard UI/UX polish** — a persisted theme toggle (auto/dark/light) that
+  overrides the OS preference; an S-meter with an S-unit scale (S1–S9/+20/+40),
+  a peak-hold marker, and the strongest-peak frequency; and inline bookmark
+  editing (add/delete from the UI, or ★ the current sweep centre) backed by new
+  token-gated `POST /api/bookmarks/add` and `/delete` endpoints. The
+  spectrum/waterfall canvases stay dark in both themes. Bookmark names are
+  HTML-escaped on render.
 - **Web dashboard authentication** — optional bearer-token auth on all `/api/…`
   endpoints (`rfhound web --token`), auto-generated when binding to a
   non-localhost host, with a warning when exposed without one. Token accepted as

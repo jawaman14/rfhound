@@ -147,6 +147,13 @@ Every panel is backed by a JSON endpoint you can consume directly:
 | `GET /api/defense/drone?simulate=` | counter-UAS detections |
 | `GET /api/defense/spoof/adsb` · `/ais` | spoof-detection findings |
 | `GET /api/bands` · `/api/decoders` | knowledge base & decoder recipes |
+| `GET /api/bookmarks` | saved frequency bookmarks |
+| `POST /api/bookmarks/add` · `/delete` | add/remove a bookmark (`{name, freq_mhz, note}`) — token-gated when a token is set |
+
+The dashboard has a **theme toggle** (auto / dark / light, persisted per browser),
+an **S-meter** with an S-unit scale + peak-hold, and inline **bookmark editing**
+(add/delete, or ★ the current sweep centre). The spectrum/waterfall canvases stay
+dark in both themes.
 
 **Authentication.** By default the dashboard binds to `127.0.0.1` with no token
 (fine for a local session). To expose it on a network, gate the API with a token:
