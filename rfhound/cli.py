@@ -46,6 +46,19 @@ def _valid_freq(freq_mhz: float) -> str | None:
     return None
 
 
+def _coerce_param(v: str):
+    """Coerce a KEY=VALUE automation param string to int/float/bool/str."""
+    low = v.strip().lower()
+    if low in ("true", "false"):
+        return low == "true"
+    for cast in (int, float):
+        try:
+            return cast(v)
+        except ValueError:
+            pass
+    return v
+
+
 def _valid_range(start_mhz: float, stop_mhz: float) -> str | None:
     """Validate a [start, stop] sweep range; return an error message or None."""
     for f in (start_mhz, stop_mhz):
@@ -1053,14 +1066,25 @@ def cmd_automate(args: argparse.Namespace, cfg: Config) -> int:
         console.table("Automations", ["Name", "Task", "Every", "Alert", "On", "Params"], rows)
         return 0
     if sub == "add":
+        if args.task not in auto_mod.TASKS:
+            console.error(f"Unknown task '{args.task}'. Choose from: {', '.join(auto_mod.TASKS)}")
+            return 1
         params = {}
         if args.start is not None:
             params["start"] = args.start
         if args.stop is not None:
             params["stop"] = args.stop
+        for kv in args.param or []:
+            if "=" not in kv:
+                console.error(f"Bad --param '{kv}'. Use KEY=VALUE.")
+                return 1
+            k, v = kv.split("=", 1)
+            params[k] = _coerce_param(v)
         auto_mod.add_automation(cfg, args.name, args.task, interval_s=args.interval,
-                                params=params, alert_on=args.alert_on, webhook=args.webhook or "")
-        console.success(f"Added automation '{args.name}' ({args.task}, every {args.interval}s).")
+                                params=params, alert_on=args.alert_on,
+                                webhook=args.webhook or "", alert_cooldown_s=args.cooldown or 0)
+        extra = f", cooldown {args.cooldown}s" if args.cooldown else ""
+        console.success(f"Added automation '{args.name}' ({args.task}, every {args.interval}s{extra}).")
         return 0
     if sub == "remove":
         ok = auto_mod.remove_automation(cfg, args.name)
@@ -1653,10 +1677,16 @@ def build_parser() -> argparse.ArgumentParser:
     ausub.add_parser("list", help="List automations")
     auadd = ausub.add_parser("add", help="Define an automation")
     auadd.add_argument("name")
-    auadd.add_argument("task", choices=["recon", "monitor", "drone", "imsi", "hop", "sweep"])
+    auadd.add_argument("task", choices=["recon", "monitor", "drone", "imsi", "hop", "sweep",
+                                        "gnss", "emitters"])
     auadd.add_argument("--interval", type=int, default=60, help="Run every N seconds")
-    auadd.add_argument("--start", type=float, help="Start MHz (monitor/sweep)")
-    auadd.add_argument("--stop", type=float, help="Stop MHz (monitor/sweep)")
+    auadd.add_argument("--start", type=float, help="Start MHz (monitor/sweep/emitters)")
+    auadd.add_argument("--stop", type=float, help="Stop MHz (monitor/sweep/emitters)")
+    auadd.add_argument("--param", action="append", metavar="KEY=VALUE",
+                       help="Extra task param (repeatable), e.g. --param file=obs.json "
+                            "--param scenario=spoofing --param static=true")
+    auadd.add_argument("--cooldown", type=int, default=0,
+                       help="Suppress repeat alerts within N seconds (0 = every time)")
     auadd.add_argument("--alert-on", dest="alert_on", default="threat",
                        choices=["threat", "always", "change"])
     auadd.add_argument("--webhook", help="POST alerts to this URL")

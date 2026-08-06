@@ -38,12 +38,20 @@ rfhound automate run                  # start the scheduler (Ctrl-C to stop)
 | `drone` | drone control/video bands | `threat`: drone RF detected |
 | `imsi` | cellular parameters | `threat`: rogue-BTS indicators |
 | `hop` | frequency-agile emitters | `threat`: hopping suspected |
+| `gnss` | GNSS integrity (`--param file=obs.json`, or a sim `--param scenario=…`) | `threat`: jamming/spoofing |
+| `emitters` | builds the emitter catalogue / EOB from a range (`--start/--stop`) | `change`: a new emitter appears |
+
+Extra task parameters go through `--param KEY=VALUE` (repeatable), e.g.
+`--param file=obs.json`, `--param scenario=spoofing`, `--param static=true`.
 
 ## Alert modes
 
 - `threat` — fire only when the task detects something (default).
 - `change` — fire when the result changes vs. the previous run (new band/peak).
 - `always` — fire every run (useful for heartbeat logging).
+
+Add `--cooldown N` to suppress repeat alerts within N seconds, so a standing
+condition (e.g. a persistent jammer) alerts once instead of every interval.
 
 ## Where things go
 

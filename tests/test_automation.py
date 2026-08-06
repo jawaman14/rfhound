@@ -14,13 +14,55 @@ def test_add_remove_enable(tmp_path, monkeypatch):
     assert cfg.automations == []
 
 
-def test_run_task_all_types_simulate():
+def test_run_task_all_types_simulate(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))  # emitters writes a catalog
     cfg = Config()
     for task in auto.TASKS:
         a = {"name": task, "task": task, "params": {"start": 433, "stop": 435}}
         res = auto.run_task(cfg, a, simulate=True)
         assert isinstance(res, auto.AutoResult)
         assert res.summary
+
+
+def test_gnss_task_alerts_on_spoofing():
+    cfg = Config()
+    a = {"name": "g", "task": "gnss",
+         "params": {"scenario": "spoofing", "static": True}, "alert_on": "threat"}
+    res = auto.run_task(cfg, a, simulate=True)
+    assert res.alert is True
+    assert res.data["status"] == "spoofing"
+
+
+def test_gnss_task_nominal_no_alert():
+    cfg = Config()
+    a = {"name": "g", "task": "gnss", "params": {"scenario": "nominal"}}
+    res = auto.run_task(cfg, a, simulate=True)
+    assert res.alert is False
+
+
+def test_emitters_task_flags_new(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    cfg = Config()
+    a = {"name": "eob", "task": "emitters", "params": {"start": 430, "stop": 440}}
+    first = auto.run_task(cfg, a, simulate=True)
+    assert first.data["emitters"]          # found some
+    assert first.data["new"]               # all new the first time
+    second = auto.run_task(cfg, a, simulate=True)
+    assert second.data["new"] == []        # already in the catalogue => not new
+
+
+def test_alert_cooldown_suppresses_repeat(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    cfg = Config()
+    auto.add_automation(cfg, "jam", "gnss", interval_s=0,
+                        params={"scenario": "jamming"}, alert_cooldown_s=100)
+    state = {}
+    ev1 = auto.run_due(cfg, simulate=True, state=state, now=1000.0, force=True)
+    ev2 = auto.run_due(cfg, simulate=True, state=state, now=1010.0, force=True)
+    ev3 = auto.run_due(cfg, simulate=True, state=state, now=1200.0, force=True)
+    assert ev1[0]["alert"] is True     # first detection alerts
+    assert ev2[0]["alert"] is False    # within cooldown => suppressed
+    assert ev3[0]["alert"] is True     # after cooldown => alerts again
 
 
 def test_monitor_alerts_on_jamming():

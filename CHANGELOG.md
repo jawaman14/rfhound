@@ -50,6 +50,12 @@ flake8-clean.
   `at`/`tune`/`classify`) for SIEM/automation; non-nominal GNSS exits non-zero.
 - **Interactive menu parity** — a SIGINT/EW submenu (interference, emitter
   catalogue, geolocation, GNSS spoof detection) and a captures/recordings entry.
+- **More automation (still receive-only)** — two new scheduled tasks: `gnss`
+  (GNSS integrity monitor that alerts on jamming/spoofing) and `emitters` (builds
+  the emitter catalogue / Electronic Order of Battle over time and alerts on new
+  emitters); an `--alert-cooldown` to suppress repeat alerts for a standing
+  condition; and a general `--param KEY=VALUE` for per-task options. Automations
+  never transmit.
 
 ### Fixed
 - **Input validation** — `sweep`, `capture`, and `classify` now reject

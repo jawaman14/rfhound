@@ -26,7 +26,7 @@ from . import sweep as sweep_mod
 from .defense import monitor_interference
 
 
-TASKS = ("recon", "monitor", "drone", "imsi", "hop", "sweep")
+TASKS = ("recon", "monitor", "drone", "imsi", "hop", "sweep", "gnss", "emitters")
 ALERT_MODES = ("threat", "always", "change")
 
 
@@ -53,6 +53,9 @@ def _norm(a: dict) -> dict:
         "params": a.get("params", {}),
         "alert_on": a.get("alert_on", "threat"),
         "webhook": a.get("webhook", ""),
+        # Suppress repeat alerts for the same automation within this many seconds
+        # (0 = alert every time). Keeps a standing condition from spamming.
+        "alert_cooldown_s": int(a.get("alert_cooldown_s", 0)),
         "enabled": a.get("enabled", True),
     }
 
@@ -109,9 +112,57 @@ def _task_sweep(cfg, params, simulate, prev) -> AutoResult:
                       {"peaks": freqs, "new": new})
 
 
+def _task_gnss(cfg, params, simulate, prev) -> AutoResult:
+    """GNSS integrity monitor — alert on jamming/spoofing indicators."""
+    from . import gnss as gnss_mod
+    obs = []
+    f = params.get("file")
+    if f:
+        try:
+            raw = json.loads(Path(f).read_text())
+        except (OSError, ValueError):
+            return AutoResult(False, "GNSS: could not read observations", {})
+        obs = [gnss_mod.GnssObservation(
+            t=float(o.get("t", 0.0)), lat=o.get("lat"), lon=o.get("lon"), alt=o.get("alt"),
+            cn0=list(o.get("cn0", [])), elevations=list(o.get("elevations", [])),
+            agc=o.get("agc"), num_sats=o.get("num_sats"), fix=bool(o.get("fix", True)))
+            for o in raw]
+    elif simulate:
+        sim = {"nominal": gnss_mod.simulate_nominal, "jamming": gnss_mod.simulate_jamming,
+               "spoofing": gnss_mod.simulate_spoofing}
+        obs = sim.get(params.get("scenario", "nominal"), gnss_mod.simulate_nominal)()
+    if not obs:
+        return AutoResult(False, "GNSS: no observations (set params.file)", {})
+    rep = gnss_mod.detect_gnss_interference(obs, static=bool(params.get("static", False)))
+    return AutoResult(rep.status != "nominal", f"GNSS {rep.status} ({rep.confidence}%)",
+                      {"status": rep.status, "findings": [x.indicator for x in rep.findings]})
+
+
+def _task_emitters(cfg, params, simulate, prev) -> AutoResult:
+    """Build the Electronic Order of Battle over time; alert on new emitters."""
+    from . import sigint as sigint_mod
+    from . import classify as classify_mod
+    lo = float(params.get("start", 430))
+    hi = float(params.get("stop", 440))
+    result = sweep_mod.sweep(cfg, lo, hi, simulate=simulate)
+    cat = sigint_mod.EmitterCatalog()
+    seen_before = {round(e.freq_mhz, 3) for e in cat.list()}
+    for p in result.peaks:
+        bw = classify_mod.estimate_bandwidth_khz(result, p.freq_hz)
+        g = classify_mod.classify(p.freq_mhz, bandwidth_khz=bw)[0]
+        cat.ingest(p.freq_mhz, power_db=p.power_db, bandwidth_khz=bw, guess=g.name, save=False)
+    cat.save()
+    now_freqs = {round(p.freq_mhz, 3) for p in result.peaks}
+    new = sorted(now_freqs - seen_before)
+    return AutoResult(bool(new), f"{len(now_freqs)} emitter(s)"
+                      + (f"; NEW: {', '.join(map(str, new))} MHz" if new else ""),
+                      {"emitters": sorted(now_freqs), "new": new})
+
+
 _RUNNERS = {
     "recon": _task_recon, "monitor": _task_monitor, "drone": _task_drone,
     "imsi": _task_imsi, "hop": _task_hop, "sweep": _task_sweep,
+    "gnss": _task_gnss, "emitters": _task_emitters,
 }
 
 
@@ -169,13 +220,21 @@ def run_due(cfg: Config, *, simulate: bool, state: dict, now: float | None = Non
         last = state.get(a["name"], {}).get("last_run", 0)
         if not force and (now - last) < a["interval_s"]:
             continue
-        prev = state.get(a["name"], {}).get("prev")
+        prev_state = state.get(a["name"], {})
+        prev = prev_state.get("prev")
         result = run_task(cfg, auto, simulate=simulate, prev=prev)
         alerting = should_alert(auto, result)
+        # Re-alert cooldown: suppress a repeat alert within the window so a
+        # standing condition alerts once, not every interval.
+        last_alert = prev_state.get("last_alert", 0)
+        cooldown = a["alert_cooldown_s"]
+        if alerting and cooldown and (now - last_alert) < cooldown:
+            alerting = False
         events.append(fire(cfg, auto, result, alerting=alerting))
-        # Update change-detection state.
+        # Update change-detection + alert-cooldown state.
         prev_key = result.data.get("active") or result.data.get("peaks") or prev
-        state[a["name"]] = {"last_run": now, "prev": prev_key}
+        state[a["name"]] = {"last_run": now, "prev": prev_key,
+                            "last_alert": now if alerting else last_alert}
     return events
 
 
@@ -207,11 +266,12 @@ def run_scheduler(cfg: Config, *, simulate: bool, tick_s: float = 2.0,
 # --------------------------------------------------------------------------- #
 def add_automation(cfg: Config, name: str, task: str, *, interval_s: int = 60,
                    params: dict | None = None, alert_on: str = "threat",
-                   webhook: str = "", persist: bool = True) -> dict:
+                   webhook: str = "", alert_cooldown_s: int = 0,
+                   persist: bool = True) -> dict:
     cfg.automations = [a for a in cfg.automations if a.get("name") != name]
     auto = {"name": name, "task": task, "interval_s": interval_s,
             "params": params or {}, "alert_on": alert_on, "webhook": webhook,
-            "enabled": True}
+            "alert_cooldown_s": alert_cooldown_s, "enabled": True}
     cfg.automations.append(auto)
     if persist:
         save_config(cfg)
