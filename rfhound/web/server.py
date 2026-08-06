@@ -180,6 +180,49 @@ def at_dict(freq_mhz: float) -> dict:
             "gnuradio": tb.gnuradio, "commands": tb.commands}
 
 
+def recordings_dict(cfg: Config) -> dict:
+    from ..modules import recordings as rec_mod
+    recs = rec_mod.list_recordings(cfg.output_dir)
+    return {"output_dir": cfg.output_dir, "recordings": [
+        {"name": r.name, "freq_mhz": r.freq_mhz, "sample_rate": r.sample_rate,
+         "seconds": r.seconds, "guess": r.guess, "guess_confidence": r.guess_confidence,
+         "modulation": r.modulation, "bandwidth_khz": r.bandwidth_khz,
+         "decoder": r.decoder} for r in recs]}
+
+
+def emitters_dict() -> dict:
+    from ..modules import sigint as sigint_mod
+    cat = sigint_mod.EmitterCatalog()
+    return {"emitters": [
+        {"freq_mhz": round(e.freq_mhz, 4), "itu": e.itu,
+         "max_power_db": e.max_power_db, "bandwidth_khz": e.bandwidth_khz,
+         "guess": e.guess, "count": e.count,
+         "first_seen": e.first_seen, "last_seen": e.last_seen}
+        for e in cat.list()]}
+
+
+def do_capture(cfg: Config, body: dict, *, simulate: bool) -> dict:
+    """Trigger a receive-only IQ capture. Raises ValueError on bad input."""
+    from ..modules import capture as capture_mod
+    try:
+        freq = float(body.get("freq_mhz"))
+    except (TypeError, ValueError):
+        raise ValueError("freq_mhz must be a number")
+    if not (1.0 <= freq <= 6000.0):
+        raise ValueError("freq_mhz must be within the HackRF range (1–6000 MHz)")
+    try:
+        seconds = float(body.get("seconds", 3))
+    except (TypeError, ValueError):
+        raise ValueError("seconds must be a number")
+    if not (0 < seconds <= 60):
+        raise ValueError("seconds must be between 0 and 60")
+    name = (str(body.get("name", "")).strip() or None)
+    cap = capture_mod.capture_iq(cfg, freq, seconds, name=name, simulate=simulate)
+    return {"ok": True, "simulated": simulate,
+            "name": cap.data_path.stem, "freq_mhz": round(cap.freq_hz / 1e6, 4),
+            "seconds": cap.seconds, "data_path": str(cap.data_path)}
+
+
 def add_bookmark(cfg: Config, body: dict) -> dict:
     """Add/replace a bookmark and persist config. Raises ValueError on bad input."""
     name = str(body.get("name", "")).strip()
@@ -329,6 +372,10 @@ def _make_handler(state: AppState):
                     return self._send_json(decoders_dict())
                 if path == "/api/bookmarks":
                     return self._send_json({"bookmarks": cfg.bookmarks})
+                if path == "/api/recordings":
+                    return self._send_json(recordings_dict(cfg))
+                if path == "/api/emitters":
+                    return self._send_json(emitters_dict())
                 if path == "/api/sightings":
                     from ..modules import sightings as sightings_mod
                     store = sightings_mod.SightingsStore()
@@ -393,6 +440,9 @@ def _make_handler(state: AppState):
                     return self._send_json(add_bookmark(state.cfg, body))
                 if path == "/api/bookmarks/delete":
                     return self._send_json(delete_bookmark(state.cfg, body))
+                if path == "/api/capture":
+                    sim = state.wants_simulate(qs) or not device.is_present()
+                    return self._send_json(do_capture(state.cfg, body, simulate=sim))
                 return self._send_json({"error": "not found", "path": path}, code=404)
             except ValueError as exc:
                 return self._send_json({"error": str(exc)}, code=400)

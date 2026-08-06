@@ -260,6 +260,47 @@ def test_bookmark_add_validation(bm_url):
             assert e.code == 400
 
 
+@pytest.fixture()
+def cap_url(tmp_path, monkeypatch):
+    # Isolate config + output dir so capture/recordings tests are self-contained.
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    cfg = Config(output_dir=str(tmp_path / "caps"))
+    state = web.build_app_state(cfg, force_simulate=True)
+    handler = web._make_handler(state)
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    port = httpd.server_address[1]
+    t = threading.Thread(target=httpd.serve_forever, daemon=True)
+    t.start()
+    yield f"http://127.0.0.1:{port}"
+    httpd.shutdown()
+    httpd.server_close()
+
+
+def test_capture_and_recordings(cap_url):
+    code, data = _post(cap_url + "/api/capture?simulate=1",
+                       {"freq_mhz": 433.92, "seconds": 1, "name": "t1"})
+    assert code == 200 and data["ok"] and data["simulated"]
+    assert data["name"] == "t1" and data["freq_mhz"] == 433.92
+    # It should now appear in the recordings listing.
+    _, recs = get(cap_url + "/api/recordings")
+    assert any(r["name"] == "t1" for r in recs["recordings"])
+
+
+def test_capture_validation(cap_url):
+    for bad in [{"freq_mhz": 9999, "seconds": 1}, {"freq_mhz": 433, "seconds": 999},
+                {"freq_mhz": "x", "seconds": 1}]:
+        try:
+            _post(cap_url + "/api/capture?simulate=1", bad)
+            assert False, "expected 400"
+        except urllib.error.HTTPError as e:
+            assert e.code == 400
+
+
+def test_emitters_endpoint(base_url):
+    code, data = get(base_url + "/api/emitters")
+    assert code == 200 and "emitters" in data
+
+
 def test_bookmark_add_requires_token():
     state = web.build_app_state(Config(), force_simulate=True, token="tok")
     handler = web._make_handler(state)
