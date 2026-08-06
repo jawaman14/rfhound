@@ -1,0 +1,29 @@
+# RFHound — dashboard + multi-node hub, for a small deployment.
+# Receive-only. For real hardware, uncomment the `devices` block (HackRF via USB)
+# and drop `--simulate` from the dashboard command.
+services:
+  dashboard:
+    build: .
+    image: rfhound:latest
+    command: ["web", "--host", "0.0.0.0", "--simulate"]
+    # For a network deployment, require a token instead of --simulate:
+    #   command: ["web", "--host", "0.0.0.0", "--token", "${RFHOUND_TOKEN}"]
+    ports:
+      - "8000:8000"
+    volumes:
+      - rfh-config:/home/rfhound/.config/rfhound
+      - rfh-caps:/home/rfhound/rfhound-captures
+    restart: unless-stopped
+    # devices:
+    #   - "/dev/bus/usb:/dev/bus/usb"
+
+  hub:
+    image: rfhound:latest
+    command: ["hub", "--port", "8787"]
+    ports:
+      - "8787:8787"
+    restart: unless-stopped
+
+volumes:
+  rfh-config:
+  rfh-caps:

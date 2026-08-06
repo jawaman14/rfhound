@@ -21,6 +21,9 @@ All notable changes to RFHound. Versioning is [SemVer](https://semver.org/).
   emitter + receiver points for a map/GIS.
 - **Config wizard** (`rfhound config wizard`) — interactive first-run setup for
   the capture dir, hardware gains, simulate default, and optional SMTP alerts.
+- **Deployment packaging** — a `Dockerfile` (bundles hackrf + rtl-433) and
+  `docker-compose.yml` (dashboard + hub), plus hardened **systemd units** in
+  `deploy/` for an unattended, receive-only, token-gated sensor node.
 
 ### Removed
 - Dead code: unused `console.live_lines`/`make_text` helpers (and their now-orphan

@@ -1,0 +1,26 @@
+# RFHound automation scheduler (receive-only tasks + alerting) as a service.
+# Runs the scheduled recon/monitor/gnss/emitters tasks defined in the config and
+# fires webhook/email alerts. Add tasks first with `rfhound automate add …`.
+#   sudo cp deploy/rfhound-automate.service /etc/systemd/system/
+#   sudo systemctl enable --now rfhound-automate
+[Unit]
+Description=RFHound automation scheduler (receive-only)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=rfhound
+Group=plugdev
+EnvironmentFile=-/etc/rfhound/rfhound.env
+ExecStart=/usr/local/bin/rfhound automate run
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/rfhound/.config/rfhound /home/rfhound/rfhound-captures
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

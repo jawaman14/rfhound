@@ -1,0 +1,22 @@
+# RFHound multi-node aggregator hub as a service.
+#   sudo cp deploy/rfhound-hub.service /etc/systemd/system/
+#   sudo systemctl enable --now rfhound-hub
+[Unit]
+Description=RFHound multi-node hub
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=rfhound
+EnvironmentFile=-/etc/rfhound/rfhound.env
+ExecStart=/usr/local/bin/rfhound hub --port 8787
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

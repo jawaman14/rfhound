@@ -1,0 +1,27 @@
+# RFHound web dashboard (receive-only) as a service.
+#   sudo cp deploy/rfhound-web.service /etc/systemd/system/
+#   sudo cp deploy/rfhound.env.example /etc/rfhound/rfhound.env  # then edit
+#   sudo systemctl enable --now rfhound-web
+[Unit]
+Description=RFHound web dashboard (receive-only)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=rfhound
+Group=plugdev
+EnvironmentFile=-/etc/rfhound/rfhound.env
+# Bind to all interfaces with a required token (set RFHOUND_TOKEN in the env file).
+ExecStart=/usr/local/bin/rfhound web --host 0.0.0.0 --port 8000 --token ${RFHOUND_TOKEN}
+Restart=on-failure
+RestartSec=5
+# Hardening.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/rfhound/.config/rfhound /home/rfhound/rfhound-captures
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

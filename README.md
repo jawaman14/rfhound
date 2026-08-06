@@ -103,6 +103,18 @@ pip install -e .
 New here? Follow the step-by-step **[tutorial](docs/TUTORIAL.md)** — it gets you
 running in ~5 minutes, with or without a HackRF. `make help` lists handy tasks.
 
+**Deploy it** (container or unattended sensor node — receive-only, token-gated):
+
+```bash
+docker run --rm -p 8000:8000 rfhound            # dashboard, simulate mode
+docker compose up -d                            # dashboard + multi-node hub
+```
+
+For a bare-metal sensor, the hardened **systemd units** in [`deploy/`](deploy/)
+run the dashboard, hub, and automation scheduler. See [`deploy/README.md`](deploy/README.md).
+
+First-run setup is interactive: `rfhound config wizard`.
+
 Then install the external SDR tools you want RFHound to drive (all optional —
 `rfhound doctor` tells you what's present and how to get the rest):
 
