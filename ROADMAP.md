@@ -6,7 +6,8 @@ intentionally opinionated about scope. It's research-informed: the threat items
 trace back to [`docs/THREATS.md`](docs/THREATS.md), and the SIGINT/DF items to the
 references at the end.
 
-_Last updated: post-v1.1.0, at 207 tests._
+_Last updated: post-v1.2.0, at 268 tests. See [VISION.md](docs/VISION.md) for the
+purpose/aim and UI positioning that steer this roadmap._
 
 ---
 
@@ -161,16 +162,18 @@ Tiers: **Now** · **Next** · **Later**. Each item: guardrail + acceptance crite
 - **[Later] IQ-file decoding** where the tool supports it (`rtl_433 -r`, URH CLI).
 
 ### 4. Detection & SIGINT depth (traces to THREATS.md gaps)
-- **[Next] Emitter-catalogue intelligence.** Alert on a *new* emitter vs a saved
-  EOB baseline (TSCM at emitter level); track on/off patterns + power trend;
-  tie into automation. *AC:* diff two EOB snapshots; alert on new emitter.
+- **[Done in 1.2.0] Emitter-catalogue intelligence (new-emitter alerting).**
+  The automation `emitters` task sweeps a range, ingests peaks into the catalogue
+  (EOB), and alerts when a genuinely new emitter appears. *Remaining:* power-trend
+  / on-off-pattern tracking, and a dashboard EOB panel (below).
 - **[Next] Jamming characterisation from IQ.** Feed `sigint jamming` an IQ capture
   to catch **swept/chirp** and **pulsed** jammers (via hop + pulse analysers).
 - **[Next] Correlated RollJam detector.** Fuse `defense monitor` (jam) + a fob
   press in time → flag the jam-then-capture pattern. *AC:* simulated trace flags.
-- **[Later] GNSS interference monitor.** Passive GPS jamming/spoofing indicators
-  (C/N0 anomalies, power step, position/time jump) from a GNSS front-end feed.
-  **Detection only — never TX.**
+- **[Done in 1.2.0] GNSS interference monitor** — `sigint gnss`: passive GPS
+  jamming/spoofing indicators (C/N0 collapse/uniformity, AGC spike, elevation
+  decorrelation, position/time jump, static-move) + L1 IQ carrier check +
+  simulators; also an automation `gnss` task. **Detection only — never TX.**
 - **[Later] Cellular downgrade detection.** Flag 2G-forcing / re-selection
   patterns alongside the existing rogue-BTS indicators.
 - **[Later] Selective-jamming detection** (LoRaWAN/others): jamming synced to
@@ -186,12 +189,17 @@ Tiers: **Now** · **Next** · **Later**. Each item: guardrail + acceptance crite
 - **[Later] Persistent spectrum-survey store** (occupancy DB + timeline view).
 
 ### 6. UX & dashboard
-- **[Now] Dashboard: live decode panel + demod one-click presets; EOB & sightings
-  panels** (endpoints exist / cheap).
+- **[In progress — v1.3] Ground-up dashboard rebuild** (SDR-software-inspired,
+  see [VISION.md](docs/VISION.md)): receiver bar with big frequency readout +
+  band presets + step controls; larger spectrum/waterfall with dB/frequency
+  axes and a hover cursor; **capture panel**, **recordings**, **emitter/EOB**,
+  and **sightings** panels; keep token auth, sim/live, export, drawer, theme.
+- **[Done in 1.2.0] Dashboard auth + bookmark add/edit** (token-gated writes),
+  theme toggle, S-meter scale + peak-hold, waterfall colormaps, per-panel export,
+  peak detail drawer.
 - **[Next] Config wizard** (`rfhound config wizard`).
-- **[Next] Dashboard bookmark add/edit** (gated + optional-auth writes).
-- **[Next] Front-end guide** surfaced in `doctor`/knowledge base (antenna/filter/
-  LNA per band).
+- **[Next] Front-end guide** surfaced in `doctor --rf`/knowledge base
+  (antenna/filter/LNA per band).
 - **[Later] Deeper URH/inspectrum handoff** from a recording.
 
 ### 7. Quality & release
@@ -220,15 +228,21 @@ defensive threat-modelling, not attack how-tos.
 
 ---
 
-## Near-term queue (concrete)
+## Near-term queue (concrete) — the v1.3 "rebuild & beef up" push
 
-1. **Auto-fill `--mod`** in `sweep --identify` (quick win, high value).
-2. **Correlated RollJam detector** + **jamming-from-IQ** (swept/pulsed).
-3. **Email alerting**; NDJSON + optional auth on hub/web.
-4. ~~TDOA module (simulator-first)~~ — **done** (`sigint locate --tdoa`); next is
-   hub-delivered snippets for a live multi-receiver fix.
-5. **Emitter-catalogue intelligence** (new-emitter alerting) + dashboard EOB panel.
-6. **PyPI + Docker + systemd** packaging for unattended sensor nodes.
+1. **Dashboard capture panel** + `POST /api/capture` (receive-only, token-gated),
+   and **recordings / emitters (EOB) / sightings** read endpoints + panels.
+2. **Ground-up dashboard UI/UX rebuild** (receiver bar, band presets, axed
+   spectrum, hover cursor) — see [VISION.md](docs/VISION.md).
+3. **Front-end guide** (`doctor --rf`): antenna/filter/LNA recommendation per band.
+4. **Config wizard** (`rfhound config wizard`).
+5. **Email (SMTP) alerting** alongside webhooks; **NDJSON** streaming feed.
+6. **GeoJSON/KML export** for `sigint locate` fixes.
+7. **PyPI + Docker + systemd** packaging for unattended sensor nodes.
+
+Done since last update: GNSS detector, emitter-catalogue new-emitter alerting,
+dashboard auth + bookmark CRUD + polish (theme/S-meter/colormaps/export/drawer),
+transmit safety hardening (safety-of-life refuse-list, duration cap, audit log).
 
 ---
 
