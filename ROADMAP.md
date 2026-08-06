@@ -228,21 +228,27 @@ defensive threat-modelling, not attack how-tos.
 
 ---
 
-## Near-term queue (concrete) — the v1.3 "rebuild & beef up" push
+## Near-term queue — the v1.3 "rebuild & beef up" push
 
-1. **Dashboard capture panel** + `POST /api/capture` (receive-only, token-gated),
-   and **recordings / emitters (EOB) / sightings** read endpoints + panels.
-2. **Ground-up dashboard UI/UX rebuild** (receiver bar, band presets, axed
-   spectrum, hover cursor) — see [VISION.md](docs/VISION.md).
-3. **Front-end guide** (`doctor --rf`): antenna/filter/LNA recommendation per band.
-4. **Config wizard** (`rfhound config wizard`).
-5. **Email (SMTP) alerting** alongside webhooks; **NDJSON** streaming feed.
-6. **GeoJSON/KML export** for `sigint locate` fixes.
-7. **PyPI + Docker + systemd** packaging for unattended sensor nodes.
+Shipped in this push:
+1. ✅ **Dashboard capture panel** + `POST /api/capture` (receive-only,
+   token-gated), and **recordings / emitters (EOB) / sightings** endpoints + panels.
+2. ✅ **Ground-up dashboard UI/UX rebuild** (receiver bar, band presets, axed
+   spectrum, hover cursor, click-to-inspect) — see [VISION.md](docs/VISION.md).
+3. ✅ **Front-end guide** (`doctor --rf [--freq]`): antenna/filter/LNA per band.
+4. ✅ **Config wizard** (`rfhound config wizard`).
+5. ✅ **Email (SMTP) alerting** (`automate add … --email`, `config smtp`) +
+   **NDJSON** streaming feed (`automate run --ndjson`).
+6. ✅ **GeoJSON export** for `sigint locate` fixes (`--geojson`).
+7. ✅ **Docker + systemd** packaging (`Dockerfile`, `docker-compose.yml`,
+   hardened units in `deploy/`) for unattended sensor nodes. *(PyPI publish TBD.)*
 
-Done since last update: GNSS detector, emitter-catalogue new-emitter alerting,
-dashboard auth + bookmark CRUD + polish (theme/S-meter/colormaps/export/drawer),
-transmit safety hardening (safety-of-life refuse-list, duration cap, audit log).
+Still open (next):
+- **Jamming characterisation from IQ** — swept/chirp & pulsed jammer detection
+  from a capture (fuse hop + pulse analysers).
+- **Correlated RollJam detector** — fuse `defense monitor` (jam) + a fob press.
+- **Live decode → EOB/sightings** wiring in real time.
+- **PyPI publish**; PDF reports; KML (alongside GeoJSON).
 
 ---
 
