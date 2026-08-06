@@ -20,6 +20,10 @@ All notable changes to RFHound. Versioning is [SemVer](https://semver.org/).
 - **GeoJSON export** for geolocation fixes (`sigint locate … --geojson FILE`) —
   emitter + receiver points for a map/GIS.
 
+### Removed
+- Dead code: unused `console.live_lines`/`make_text` helpers (and their now-orphan
+  rich imports), and an always-true `if` guard in the `node` command.
+
 ## [1.2.0] — 2026-08-06
 
 Enterprise hardening on top of 1.1: GNSS integrity monitoring, an authenticated

@@ -1058,9 +1058,8 @@ def cmd_node(args: argparse.Namespace, cfg: Config) -> int:
             data = {"rogue_bts_score": cellular_mod.score(alerts), "alerts": len(alerts)}
         else:
             data = {"status": "online"}
-        if args.scan or True:
-            node_report(hub, node_id, args.scan or "status", data, token=token)
-            console.success(f"Pushed report ({args.scan or 'status'}): {data}")
+        node_report(hub, node_id, args.scan or "status", data, token=token)
+        console.success(f"Pushed report ({args.scan or 'status'}): {data}")
     except Exception as exc:
         console.error(f"Node link failed: {exc}")
         return 2

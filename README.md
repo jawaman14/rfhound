@@ -1,7 +1,11 @@
 # RFHound 🐕‍🦺📡
 
 **A friendly, powerful HackRF reconnaissance & RF situational-awareness toolkit.**
-_Version 1.2 · receive-first · 243 tests · MIT._
+_Version 1.3 (dev) · receive-first · 278 tests · MIT._
+
+> See [`docs/VISION.md`](docs/VISION.md) for what RFHound is (and isn't) — a
+> receive-first RF situational-awareness & defensive-SIGINT console, not a
+> live-audio SDR receiver.
 
 RFHound turns a wall of raw spectrum into *"oh, that's a tire-pressure sensor"*.
 It is an **orchestration layer** — it does not re-implement DSP. Instead it
@@ -19,10 +23,14 @@ always know what you're looking at.
 
 ## Web dashboard
 
-A zero-dependency browser dashboard (live spectrum + waterfall, recon, threat
-detection, knowledge base, hardware status) backed by a JSON REST API — the
-integration surface for a SIEM / monitoring stack. **Receive-and-analyse only:
-there is no transmit endpoint**, so exposing the dashboard never keys the radio.
+A zero-dependency browser dashboard backed by a JSON REST API — the integration
+surface for a SIEM / monitoring stack. **Receive-and-analyse only: there is no
+transmit endpoint**, so exposing the dashboard never keys the radio. It's built
+around an SDR-style **receiver bar** (big frequency readout, band presets,
+step/zoom), an interactive spectrum + waterfall (hover cursor, click-to-inspect,
+selectable colormaps), an **S-meter**, and panels for recon, threats, **IQ
+capture**, **recordings**, the **emitter catalogue (EOB)**, **sightings**,
+bookmarks, and the knowledge base. Optional token auth gates it for network use.
 
 ```bash
 rfhound web --open            # dashboard at http://127.0.0.1:8000
@@ -56,8 +64,10 @@ the law. That's RFHound.
 | Save a signal for deep analysis | `rfhound capture 433.92 10` — IQ + SigMF metadata for URH |
 | Replay your *own* signal (authorized) | `rfhound replay file.sigmf-data --authorized` (gated) |
 | **Detect** jamming / replay / weak fobs | `rfhound defense …` — detection & hardening, not attacks |
-| Characterise/locate emitters (SIGINT/EW) | `rfhound sigint …` — ELINT pulse analysis, jamming type, emitter catalogue, RSSI + TDOA geolocation |
+| Characterise/locate emitters (SIGINT/EW) | `rfhound sigint …` — ELINT pulse analysis, jamming type, emitter catalogue, RSSI + TDOA geolocation (`--geojson` for maps) |
 | **Detect** GNSS jamming / spoofing | `rfhound sigint gnss --file obs.json` — C/N0, AGC, position-jump & elevation checks (`--json` for SIEM) |
+| Pick the right antenna/filter/LNA | `rfhound doctor --rf` (or `--rf --freq 1090`) — front-end guide per band |
+| Automate + alert (webhook or email) | `rfhound automate add …` — scheduled receive-only tasks → webhook/email/SIEM |
 
 ## Highlights
 
@@ -167,6 +177,7 @@ ACARS/APRS, NOAA weather-satellite imagery, GPS L1 (receive-only), and the busy
 ## Documentation
 
 - [`docs/HELP.md`](docs/HELP.md) — **full command reference** (start here)
+- [`docs/VISION.md`](docs/VISION.md) — purpose, aim & positioning vs other SDR software
 - [`CHANGELOG.md`](CHANGELOG.md) — version history
 - [`ROADMAP.md`](ROADMAP.md) — where the project is going (incl. TDOA geolocation)
 - [`docs/LEGAL.md`](docs/LEGAL.md) — **read this first**; law, ethics, and what's excluded

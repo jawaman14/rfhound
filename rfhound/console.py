@@ -14,8 +14,6 @@ try:  # pragma: no cover - exercised implicitly
     from rich.table import Table
     from rich.prompt import Prompt, Confirm
     from rich.syntax import Syntax
-    from rich.live import Live
-    from rich.text import Text
 
     _HAVE_RICH = True
     _console = _RichConsole()
@@ -216,34 +214,6 @@ def syntax(code: str, lang: str = "python", title: str = "") -> None:
         if title:
             rule(title)
         print(code)
-
-
-def live_lines(render_fn, *, refresh: int = 4):
-    """Return a rich Live context bound to render_fn() -> renderable/str.
-
-    Falls back to a no-op context that just calls render_fn once when rich is
-    unavailable. Use as: `with live_lines(fn) as live: ...; live.update()`.
-    """
-    if _HAVE_RICH:
-        return Live(Text(str(render_fn())), refresh_per_second=refresh, console=_console)
-
-    class _NL:
-        def __enter__(self):
-            print(render_fn())
-            return self
-
-        def __exit__(self, *a):
-            return False
-
-        def update(self, *a, **k):
-            print(render_fn())
-
-    return _NL()
-
-
-def make_text(s: str):
-    """Wrap a string as a rich Text (or return the string in fallback)."""
-    return Text(s) if _HAVE_RICH else s
 
 
 BANNER = r"""
