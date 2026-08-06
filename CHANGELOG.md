@@ -24,6 +24,10 @@ flake8-clean.
   existing waterfall without re-sweeping.
 - **Per-panel export** — download the peaks, recon, and knowledge-base tables as
   CSV or JSON straight from the dashboard.
+- **Peak detail drawer** — clicking a spectrum peak opens a slide-in drawer with
+  "what's here" (band, decoders, detectors), a ranked signal classification with
+  confidence bars, and a copyable suggested decoder command, plus tune/bookmark
+  shortcuts.
 - A 204 handler for `/favicon.ico` (silences the browser's default request).
 - **Web dashboard authentication** — optional bearer-token auth on all `/api/…`
   endpoints (`rfhound web --token`), auto-generated when binding to a

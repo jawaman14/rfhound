@@ -147,6 +147,15 @@ def test_dashboard_has_new_controls(base_url):
     assert "expPeaksCsv" in html and "exportRecon" in html and "exportBands" in html
 
 
+def test_dashboard_has_peak_drawer(base_url):
+    with urllib.request.urlopen(base_url + "/", timeout=5) as r:
+        html = r.read().decode()
+    assert 'id="drawer"' in html and "openPeakDrawer" in html
+    # Clicking a peak opens the drawer (not the old scroll-to-bands behaviour).
+    assert "openPeakDrawer(tr.dataset.f" in html
+    assert 'id="drwTune"' in html and 'id="drwBookmark"' in html
+
+
 @pytest.fixture()
 def auth_url():
     state = web.build_app_state(Config(), force_simulate=True, token="s3cr3t")
