@@ -1,7 +1,7 @@
 # RFHound 🐕‍🦺📡
 
 **A friendly, powerful HackRF reconnaissance & RF situational-awareness toolkit.**
-_Version 1.1 · receive-first · 207 tests · MIT._
+_Version 1.2 · receive-first · 243 tests · MIT._
 
 RFHound turns a wall of raw spectrum into *"oh, that's a tire-pressure sensor"*.
 It is an **orchestration layer** — it does not re-implement DSP. Instead it
@@ -27,7 +27,11 @@ there is no transmit endpoint**, so exposing the dashboard never keys the radio.
 ```bash
 rfhound web --open            # dashboard at http://127.0.0.1:8000
 rfhound web --simulate        # demo it with no hardware
+rfhound web --host 0.0.0.0 --token   # expose on a network, gated by a token
 ```
+
+Bound to localhost by default; exposing it on a network auto-generates an API
+token (or pass your own) so the REST API isn't open. Still receive-only.
 
 ![RFHound dashboard](docs/dashboard.png)
 
@@ -52,6 +56,8 @@ the law. That's RFHound.
 | Save a signal for deep analysis | `rfhound capture 433.92 10` — IQ + SigMF metadata for URH |
 | Replay your *own* signal (authorized) | `rfhound replay file.sigmf-data --authorized` (gated) |
 | **Detect** jamming / replay / weak fobs | `rfhound defense …` — detection & hardening, not attacks |
+| Characterise/locate emitters (SIGINT/EW) | `rfhound sigint …` — ELINT pulse analysis, jamming type, emitter catalogue, RSSI + TDOA geolocation |
+| **Detect** GNSS jamming / spoofing | `rfhound sigint gnss --file obs.json` — C/N0, AGC, position-jump & elevation checks (`--json` for SIEM) |
 
 ## Highlights
 

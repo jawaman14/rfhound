@@ -2,7 +2,12 @@
 
 All notable changes to RFHound. Versioning is [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [1.2.0] — 2026-08-06
+
+Enterprise hardening on top of 1.1: GNSS integrity monitoring, an authenticated
+dashboard, machine-readable output, and menu parity. Still receive-first; the
+no-Electronic-Attack guarantees are unchanged and test-enforced. **243 tests**,
+flake8-clean.
 
 ### Added
 - **Web dashboard authentication** — optional bearer-token auth on all `/api/…`
