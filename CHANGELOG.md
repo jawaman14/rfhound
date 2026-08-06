@@ -19,6 +19,8 @@ All notable changes to RFHound. Versioning is [SemVer](https://semver.org/).
   `config smtp …`) alongside webhooks.
 - **GeoJSON export** for geolocation fixes (`sigint locate … --geojson FILE`) —
   emitter + receiver points for a map/GIS.
+- **Config wizard** (`rfhound config wizard`) — interactive first-run setup for
+  the capture dir, hardware gains, simulate default, and optional SMTP alerts.
 
 ### Removed
 - Dead code: unused `console.live_lines`/`make_text` helpers (and their now-orphan

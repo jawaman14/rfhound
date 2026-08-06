@@ -1,3 +1,4 @@
+import builtins
 import json
 
 import pytest
@@ -7,6 +8,21 @@ from rfhound import cli
 
 def run(argv):
     return cli.main(argv)
+
+
+def test_config_wizard_saves(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    answers = iter([str(tmp_path / "caps"), "10", "24", "20", "y", "n", "y", "n"])
+    monkeypatch.setattr(builtins, "input", lambda prompt="": next(answers))
+    rc = run(["config", "wizard"])
+    assert rc == 0
+    from rfhound.config import load_config
+    cfg = load_config()
+    assert cfg.output_dir == str(tmp_path / "caps")
+    assert cfg.sample_rate == 10_000_000
+    assert cfg.lna_gain == 24
+    assert cfg.amp_enable is True
+    assert cfg.simulate_mode is True
 
 
 @pytest.mark.parametrize("argv", [

@@ -1382,7 +1382,47 @@ def cmd_bookmark(args: argparse.Namespace, cfg: Config) -> int:
     return 0
 
 
+def _config_wizard(cfg: Config) -> int:
+    """Interactive first-run setup: capture dir, hardware, simulate, alerts."""
+    console.rule("RFHound config wizard")
+    console.print_("Press Enter to keep the shown default. Ctrl-C to abort.\n")
+
+    cfg.output_dir = console.ask("Capture output directory", default=cfg.output_dir)
+    try:
+        sr = float(console.ask("Sample rate (MSPS)", default=str(cfg.sample_rate / 1e6)))
+        cfg.sample_rate = int(sr * 1e6)
+        cfg.lna_gain = int(console.ask("LNA gain (0-40 dB, step 8)", default=str(cfg.lna_gain)))
+        cfg.vga_gain = int(console.ask("VGA gain (0-62 dB, step 2)", default=str(cfg.vga_gain)))
+    except ValueError:
+        console.error("Numbers only — aborting without saving.")
+        return 1
+    cfg.amp_enable = console.confirm("Enable the RX amplifier?", default=cfg.amp_enable)
+    cfg.antenna_power = console.confirm("Enable bias-tee (power an external LNA)?",
+                                        default=cfg.antenna_power)
+    cfg.simulate_mode = console.confirm("Default to SIMULATE mode (no hardware)?",
+                                        default=cfg.simulate_mode)
+
+    if console.confirm("Configure SMTP for email alerts now?", default=bool(cfg.smtp_host)):
+        cfg.smtp_host = console.ask("SMTP host", default=cfg.smtp_host)
+        try:
+            cfg.smtp_port = int(console.ask("SMTP port", default=str(cfg.smtp_port)))
+        except ValueError:
+            cfg.smtp_port = 587
+        cfg.smtp_user = console.ask("SMTP username (blank for none)", default=cfg.smtp_user)
+        if cfg.smtp_user:
+            cfg.smtp_password = console.ask("SMTP password", default=cfg.smtp_password)
+        cfg.smtp_from = console.ask("From address", default=cfg.smtp_from or cfg.smtp_user)
+        cfg.smtp_use_tls = console.confirm("Use STARTTLS?", default=cfg.smtp_use_tls)
+
+    path = save_config(cfg)
+    console.success(f"Saved configuration to {path}")
+    console.print_("Next: rfhound doctor   ·   rfhound recon --simulate   ·   rfhound web")
+    return 0
+
+
 def cmd_config(args: argparse.Namespace, cfg: Config) -> int:
+    if args.config_cmd == "wizard":
+        return _config_wizard(cfg)
     if args.config_cmd == "path":
         console.print_(str(config_path()))
         return 0
@@ -1802,6 +1842,7 @@ def build_parser() -> argparse.ArgumentParser:
     csub = pcfg.add_subparsers(dest="config_cmd")
     csub.add_parser("show", help="Print current config")
     csub.add_parser("init", help="Write a default config file")
+    csub.add_parser("wizard", help="Interactive first-run setup")
     csub.add_parser("path", help="Print config file path")
     csmtp = csub.add_parser("smtp", help="Configure SMTP for email alerts")
     csmtp.add_argument("--host")
