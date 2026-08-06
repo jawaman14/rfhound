@@ -62,6 +62,9 @@ class Config:
     # Only these ranges may be transmitted in, even when tx_enabled is True.
     tx_allow_ranges: list[TxAllowRange] = field(default_factory=list)
     tx_gain: int = 20  # 0-47 dB
+    # Hard cap on a single replay's on-air duration (seconds). A capture longer
+    # than this is refused — keeps an accidental long/looping transmit in check.
+    tx_max_seconds: int = 30
     # Operator's jurisdiction, printed in reports / warnings.
     jurisdiction: str = ""
 

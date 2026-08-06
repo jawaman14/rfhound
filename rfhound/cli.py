@@ -601,7 +601,19 @@ def cmd_replay(args: argparse.Namespace, cfg: Config) -> int:
         console.error(str(exc))
         return 2
     if args.dry_run:
-        console.print_(f"  would run: {proc.format_command(plan.command)}")
+        console.rule("Transmit preflight (dry-run — nothing was keyed)")
+        itu = bandplan.itu_label(plan.freq_hz)
+        console.print_(f"  frequency : {plan.freq_hz/1e6:.4f} MHz  ({itu})")
+        dur = (f"{plan.duration_s:.2f} s" if plan.duration_s is not None
+               else "unknown (no sample count in metadata)")
+        console.print_(f"  duration  : {dur}  ·  cap {cfg.tx_max_seconds}s")
+        console.print_(f"  tx gain   : {plan.tx_gain} dB  ·  sample rate {plan.sample_rate/1e6:.3f} MSPS")
+        allowed = "inside a declared allow-range" if cfg.is_tx_range_allowed(plan.freq_hz) \
+            else "NOT in any allow-range"
+        console.print_(f"  allow-list: {allowed}")
+        if plan.protected:
+            console.error(f"  PROTECTED : safety-of-life band ({plan.protected}) — real transmit is refused")
+        console.print_(f"  would run : {proc.format_command(plan.command)}")
     else:
         console.success(f"Replayed {data_path.name} @ {plan.freq_hz/1e6:.3f} MHz")
     return 0
@@ -612,11 +624,41 @@ def cmd_tx(args: argparse.Namespace, cfg: Config) -> int:
         console.print_(f"Transmit: {'ENABLED' if cfg.tx_enabled else 'disabled'}")
         console.print_(f"Consent recorded: {cfg.tx_consent_at or '(none)'}")
         console.print_(f"Jurisdiction: {cfg.jurisdiction or '(unset)'}")
+        console.print_(f"Max replay duration: {cfg.tx_max_seconds}s (tx_max_seconds)")
         if cfg.tx_allow_ranges:
             for r in cfg.tx_allow_ranges:
                 console.print_(f"  allow: {r.low_hz/1e6:.3f}-{r.high_hz/1e6:.3f} MHz  {r.note}")
         else:
             console.print_("  allow: (no ranges declared)")
+        console.print_(f"Safety-of-life bands are always refused ({len(safety.PROTECTED_BANDS)} "
+                       "ranges: GNSS, aviation, marine distress, emergency beacons).")
+        recent = safety.read_tx_audit(3)
+        if recent:
+            console.print_("Recent transmit audit:")
+            for e in recent:
+                console.print_(f"  {e['t']}  {e.get('freq_mhz','?')} MHz  {e['outcome']}"
+                               + (f" — {e['reason']}" if e.get('reason') else ""))
+        return 0
+
+    if args.tx_cmd == "audit":
+        import json
+        if args.clear:
+            n = safety.clear_tx_audit()
+            console.success(f"Cleared {n} audit record(s).")
+            return 0
+        entries = safety.read_tx_audit(args.top)
+        if args.json:
+            console.raw(json.dumps(entries, indent=2))
+            return 0
+        if not entries:
+            console.warn("No transmit events recorded yet.")
+            return 0
+        rows = [[e["t"], f"{e.get('freq_mhz','?')}", e["outcome"],
+                 "yes" if e.get("dry_run") else "no",
+                 f"{e['duration_s']}s" if e.get("duration_s") is not None else "—",
+                 e.get("reason", "")] for e in entries]
+        console.table(f"Transmit audit log ({len(entries)})",
+                      ["Time (UTC)", "MHz", "Outcome", "Dry-run", "Duration", "Reason"], rows)
         return 0
 
     if args.tx_cmd == "disable":
@@ -1441,14 +1483,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     pt = sub.add_parser("tx", help="Manage transmit authorization")
     tsub = pt.add_subparsers(dest="tx_cmd", required=True)
-    tsub.add_parser("status", help="Show transmit settings")
+    tsub.add_parser("status", help="Show transmit settings + recent audit")
     tsub.add_parser("disable", help="Disable transmit")
+    ta = tsub.add_parser("audit", help="Show the append-only transmit audit log")
+    ta.add_argument("--top", type=int, default=50, help="Show the most recent N events")
+    ta.add_argument("--json", action="store_true", help="Machine-readable output")
+    ta.add_argument("--clear", action="store_true", help="Clear the audit log")
     te = tsub.add_parser("enable", help="Enable transmit with a frequency allow-list")
     te.add_argument("--allow", action="append", metavar="MHZ-MHZ",
                     help="Allowed TX range (repeatable), e.g. --allow 433.0-434.8")
     te.add_argument("--jurisdiction", help="Your jurisdiction (for reports)")
     te.add_argument("--yes", action="store_true", help="Accept legal terms non-interactively")
-    pt.set_defaults(func=cmd_tx)
+    pt.set_defaults(func=cmd_tx, top=50, json=False, clear=False)
 
     pdf = sub.add_parser("defense", help="Defensive analysis: detect attacks, assess resilience")
     fsub = pdf.add_subparsers(dest="defense_cmd", required=True)

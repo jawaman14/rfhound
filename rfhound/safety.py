@@ -21,14 +21,40 @@ Those are excluded by design; see ``docs/LEGAL.md``.
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
+from pathlib import Path
 
-from .config import Config, TxAllowRange, save_config
+from .config import Config, TxAllowRange, config_path, save_config
 from .exceptions import SafetyError
 
 # HackRF hardware limits (Hz).
 HW_MIN_HZ = 1_000_000
 HW_MAX_HZ = 6_000_000_000
+
+# Safety-of-life / GNSS bands. Transmitting here endangers navigation, aviation,
+# or distress systems and is essentially never legal for an operator. These are
+# HARD-refused even if the operator allow-listed a range that covers them — the
+# allow-list expresses intent, but nothing overrides a safety-of-life block.
+PROTECTED_BANDS = [
+    (108_000_000, 137_000_000, "Aviation VHF (ILS/VOR/comms incl. 121.5 emergency)"),
+    (156_700_000, 156_900_000, "Marine VHF Ch16 distress"),
+    (161_900_000, 162_050_000, "AIS marine safety"),
+    (406_000_000, 406_100_000, "COSPAS-SARSAT distress beacons (EPIRB/PLB/ELT)"),
+    (976_000_000, 980_000_000, "Aviation UAT 978 (ADS-B)"),
+    (1_087_000_000, 1_093_000_000, "ADS-B 1090 (aviation surveillance)"),
+    (1_164_000_000, 1_300_000_000, "GNSS L2/L5/E6 (GPS/GLONASS/Galileo)"),
+    (1_525_000_000, 1_660_500_000, "GNSS L1 / satellite (GPS/GLONASS/Galileo/Iridium/Inmarsat)"),
+]
+
+
+def protected_band(freq_hz: int) -> str | None:
+    """Return the name of the safety-of-life band containing *freq_hz*, or None."""
+    for lo, hi, name in PROTECTED_BANDS:
+        if lo <= freq_hz <= hi:
+            return name
+    return None
+
 
 CONSENT_TEXT = """\
 By enabling transmit you confirm ALL of the following:
@@ -116,6 +142,13 @@ def authorize_tx(cfg: Config, freq_hz: int, *, authorized: bool) -> None:
             f"Transmit blocked: {freq_hz} Hz is outside the HackRF hardware "
             f"range ({HW_MIN_HZ}-{HW_MAX_HZ} Hz)."
         )
+    protected = protected_band(freq_hz)
+    if protected:
+        raise SafetyError(
+            f"Transmit blocked: {freq_hz / 1e6:.4f} MHz is a safety-of-life band "
+            f"({protected}). RFHound refuses to transmit here regardless of the "
+            f"allow-list — transmitting risks lives and is not permitted."
+        )
     if not cfg.is_tx_range_allowed(freq_hz):
         ranges = ", ".join(
             f"{r.low_hz}-{r.high_hz} Hz" for r in cfg.tx_allow_ranges
@@ -124,3 +157,60 @@ def authorize_tx(cfg: Config, freq_hz: int, *, authorized: bool) -> None:
             f"Transmit blocked: {freq_hz} Hz is not inside any declared "
             f"allow-range. Allowed: {ranges}."
         )
+
+
+# --------------------------------------------------------------------------- #
+# Transmit audit log — an append-only record of every transmit attempt (real,
+# blocked, or dry-run), so any use of the radio is accountable.
+# --------------------------------------------------------------------------- #
+def tx_audit_path() -> Path:
+    return config_path().parent / "tx_audit.log"
+
+
+def record_tx_event(*, freq_hz, sample_rate, gain, duration_s, authorized,
+                    dry_run, outcome, reason="") -> dict:
+    """Append one transmit event to the audit log (best-effort; never raises)."""
+    entry = {
+        "t": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "freq_hz": freq_hz, "freq_mhz": round(freq_hz / 1e6, 4) if freq_hz else None,
+        "sample_rate": sample_rate, "tx_gain": gain,
+        "duration_s": round(duration_s, 3) if duration_s is not None else None,
+        "authorized": bool(authorized), "dry_run": bool(dry_run),
+        "outcome": outcome, "reason": reason,
+    }
+    try:
+        p = tx_audit_path()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        with p.open("a") as f:
+            f.write(json.dumps(entry) + "\n")
+    except OSError:
+        pass
+    return entry
+
+
+def read_tx_audit(limit: int = 50) -> list:
+    p = tx_audit_path()
+    if not p.exists():
+        return []
+    try:
+        lines = p.read_text().splitlines()
+    except OSError:
+        return []
+    out = []
+    for ln in lines[-limit:]:
+        try:
+            out.append(json.loads(ln))
+        except ValueError:
+            pass
+    return out
+
+
+def clear_tx_audit() -> int:
+    p = tx_audit_path()
+    n = len(read_tx_audit(10 ** 9))
+    try:
+        if p.exists():
+            p.unlink()
+    except OSError:
+        pass
+    return n

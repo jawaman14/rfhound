@@ -29,6 +29,18 @@ flake8-clean.
   confidence bars, and a copyable suggested decoder command, plus tune/bookmark
   shortcuts.
 - A 204 handler for `/favicon.ico` (silences the browser's default request).
+- **Transmit safety hardening** (authorized replay-of-your-own-capture only —
+  still no signal generation, jamming, or spoofing):
+  - **Safety-of-life refuse-list** — GNSS, aviation VHF (incl. 121.5), ADS-B/UAT,
+    marine distress, and COSPAS-SARSAT beacon bands are **always** refused, even
+    if the operator allow-listed a range covering them.
+  - **Max replay duration cap** (`tx_max_seconds`, default 30 s) rejects an
+    over-long or looping on-air time.
+  - **Append-only transmit audit log** of every attempt (transmitted / blocked /
+    dry-run) — view with `rfhound tx audit [--json] [--clear]`; `tx status` shows
+    the policy + recent events.
+  - **`replay --dry-run`** now prints a preflight summary (frequency + ITU band,
+    duration vs. cap, allow-list status, protected-band check) without keying.
 - **Web dashboard authentication** — optional bearer-token auth on all `/api/…`
   endpoints (`rfhound web --token`), auto-generated when binding to a
   non-localhost host, with a warning when exposed without one. Token accepted as

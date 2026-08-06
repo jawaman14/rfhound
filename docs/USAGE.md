@@ -119,12 +119,29 @@ rfhound tx enable --allow 433.0-434.8 --jurisdiction "EU"
 rfhound replay capture_433MHz.sigmf-data --authorized --dry-run   # preview
 rfhound replay capture_433MHz.sigmf-data --authorized             # transmit
 
-rfhound tx status         # review settings
+rfhound tx status         # review settings + policy + recent audit
+rfhound tx audit          # the append-only transmit audit log (--json, --clear)
 rfhound tx disable        # turn transmit back off
 ```
 
 RFHound refuses to transmit outside your declared allow-list, outside the HackRF
-hardware range, or without the per-command `--authorized` flag.
+hardware range, or without the per-command `--authorized` flag. On top of that:
+
+- **Safety-of-life bands are always refused** — GNSS, aviation VHF (incl. the
+  121.5 MHz emergency channel), ADS-B/UAT, marine distress, and COSPAS-SARSAT
+  beacon frequencies are blocked *even if* you allow-listed a range covering
+  them. Transmitting there endangers navigation and distress systems.
+- **A duration cap** (`tx_max_seconds`, default 30 s) refuses an over-long or
+  looping replay.
+- **Every attempt is audited** — transmitted, blocked, and dry-run events are
+  appended to `~/.config/rfhound/tx_audit.log` with timestamp, frequency,
+  duration, and outcome, so any use of the radio is accountable.
+- **`--dry-run` prints a full preflight** (frequency + ITU band, duration vs.
+  cap, allow-list status, protected-band check) without keying the transmitter.
+
+RFHound still provides **no** signal generation, jamming, spoofing, or
+brute-force transmit — the only transmit path is replaying an IQ file you
+captured yourself, for authorized testing of your own equipment.
 
 ## The web dashboard & REST API
 

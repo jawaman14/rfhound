@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from rfhound.config import Config, TxAllowRange, load_config, save_config
 from rfhound.modules import recon as recon_mod
 from rfhound.modules import report as report_mod
@@ -64,3 +66,36 @@ def test_replay_dry_run_gated(tmp_path):
         assert False, "should have raised (tx disabled)"
     except SafetyError:
         pass
+
+
+def test_replay_duration_cap(tmp_path, monkeypatch):
+    from rfhound.config import TxAllowRange
+    from rfhound.modules import capture as capture_mod
+    from rfhound.modules import replay as replay_mod
+    from rfhound.exceptions import SafetyError
+    from rfhound import safety
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    cfg = Config(output_dir=str(tmp_path), tx_max_seconds=2)
+    cfg = safety.enable_tx(cfg, [TxAllowRange(433_000_000, 434_800_000)], persist=False)
+    cap = capture_mod.capture_iq(cfg, 433.92, 5.0, simulate=True)  # 5s > 2s cap
+    with pytest.raises(SafetyError) as exc:
+        replay_mod.replay(cfg, cap.data_path, authorized=True, dry_run=False)
+    assert "cap" in str(exc.value)
+    # The block was audited.
+    events = safety.read_tx_audit()
+    assert events and events[-1]["outcome"] == "blocked"
+
+
+def test_replay_dry_run_records_audit(tmp_path, monkeypatch):
+    from rfhound.config import TxAllowRange
+    from rfhound.modules import capture as capture_mod
+    from rfhound.modules import replay as replay_mod
+    from rfhound import safety
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    cfg = Config(output_dir=str(tmp_path))
+    cfg = safety.enable_tx(cfg, [TxAllowRange(433_000_000, 434_800_000)], persist=False)
+    cap = capture_mod.capture_iq(cfg, 433.92, 1.0, simulate=True)
+    plan = replay_mod.replay(cfg, cap.data_path, authorized=True, dry_run=True)
+    assert plan.protected is None
+    events = safety.read_tx_audit()
+    assert events and events[-1]["outcome"] == "dry-run"
