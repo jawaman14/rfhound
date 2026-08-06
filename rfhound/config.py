@@ -81,8 +81,16 @@ class Config:
     # Saved frequency bookmarks / memory channels: [{name, freq_mhz, note}].
     bookmarks: list = field(default_factory=list)
 
-    # Automations: [{name, task, interval_s, params, alert_on, webhook, enabled}].
+    # Automations: [{name, task, interval_s, params, alert_on, webhook, email, enabled}].
     automations: list = field(default_factory=list)
+
+    # --- SMTP email alerting (optional; alongside webhooks) -----------------
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
+    smtp_use_tls: bool = True
 
     # --- Multi-node linking -------------------------------------------------
     hub_url: str = ""         # aggregator this node reports to

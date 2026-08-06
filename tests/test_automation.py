@@ -51,6 +51,46 @@ def test_emitters_task_flags_new(tmp_path, monkeypatch):
     assert second.data["new"] == []        # already in the catalogue => not new
 
 
+def test_email_alert_sent_on_fire(tmp_path, monkeypatch):
+    import smtplib
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    sent = {}
+
+    class FakeSMTP:
+        def __init__(self, host, port, timeout=0):
+            sent["host"] = host
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            pass
+
+        def starttls(self, context=None):
+            sent["tls"] = True
+
+        def login(self, u, p):
+            sent["login"] = (u, p)
+
+        def send_message(self, msg):
+            sent["to"] = msg["To"]
+            sent["subject"] = msg["Subject"]
+
+    monkeypatch.setattr(smtplib, "SMTP", FakeSMTP)
+    cfg = Config(smtp_host="mail.test", smtp_user="u", smtp_password="p")
+    a = {"name": "j", "task": "gnss", "params": {"scenario": "jamming"},
+         "alert_on": "threat", "email": "you@test", "webhook": ""}
+    res = auto.run_task(cfg, a, simulate=True)
+    auto.fire(cfg, a, res, alerting=True)
+    assert sent.get("to") == "you@test"
+    assert "RFHound alert" in sent.get("subject", "")
+
+
+def test_email_not_sent_without_config():
+    # No smtp_host => send_email is a no-op returning False.
+    assert auto.send_email(Config(), "x@y", "s", "b") is False
+
+
 def test_alert_cooldown_suppresses_repeat(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     cfg = Config()

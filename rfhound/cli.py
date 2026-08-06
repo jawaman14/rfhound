@@ -74,6 +74,27 @@ def _valid_range(start_mhz: float, stop_mhz: float) -> str | None:
 # Subcommand handlers
 # --------------------------------------------------------------------------- #
 def cmd_doctor(args: argparse.Namespace, cfg: Config) -> int:
+    if getattr(args, "rf", False):
+        from .modules import frontend as fe_mod
+        console.rule("RF front-end guide (antenna / filter / LNA)")
+        if args.freq is not None:
+            fe = fe_mod.recommend(args.freq)
+            if not fe:
+                console.error(f"{args.freq} MHz is outside 0–6000 MHz.")
+                return 1
+            console.print_(f"[bold]{fe.band}[/bold]" if console.have_rich() else fe.band)
+            console.print_(f"  Antenna : {fe.antenna}")
+            console.print_(f"  Filter  : {fe.filter}")
+            console.print_(f"  LNA     : {fe.lna}")
+            if fe.note:
+                console.print_(f"  Note    : {fe.note}")
+            return 0
+        rows = [[fe.band, fe.antenna, fe.filter, fe.lna] for fe in fe_mod.guide()]
+        console.table("Front-end by band", ["Band", "Antenna", "Filter", "LNA"], rows)
+        console.print_("")
+        for n in fe_mod.GENERAL_NOTES:
+            console.print_(f"  • {n}")
+        return 0
     if getattr(args, "json", False):
         import json
         from .web.server import status_dict
@@ -1082,7 +1103,8 @@ def cmd_automate(args: argparse.Namespace, cfg: Config) -> int:
             params[k] = _coerce_param(v)
         auto_mod.add_automation(cfg, args.name, args.task, interval_s=args.interval,
                                 params=params, alert_on=args.alert_on,
-                                webhook=args.webhook or "", alert_cooldown_s=args.cooldown or 0)
+                                webhook=args.webhook or "", email=args.email or "",
+                                alert_cooldown_s=args.cooldown or 0)
         extra = f", cooldown {args.cooldown}s" if args.cooldown else ""
         console.success(f"Added automation '{args.name}' ({args.task}, every {args.interval}s{extra}).")
         return 0
@@ -1226,6 +1248,14 @@ def cmd_sigint(args: argparse.Namespace, cfg: Config) -> int:
             if fix.residual_m is not None:
                 extra.append(f"residual {fix.residual_m} m")
             console.print_(f"  {fix.n_nodes} nodes · " + " · ".join(extra) + f" · {fix.detail}")
+            if args.geojson:
+                from .modules import geo
+                nd = [{"node": n.node, "lat": n.lat, "lon": n.lon} for n in nodes]
+                geo.write_geojson(args.geojson, geo.fix_geojson(
+                    fix.lat, fix.lon,
+                    {"method": fix.method, "confidence_m": fix.confidence_m,
+                     "gdop": fix.gdop, "residual_m": fix.residual_m}, nd))
+                console.success(f"Wrote GeoJSON: {args.geojson}")
             return 0
         if args.simulate:
             reports = sigint.simulate_reports()
@@ -1242,6 +1272,14 @@ def cmd_sigint(args: argparse.Namespace, cfg: Config) -> int:
         console.success(f"Estimated position: {est.lat}, {est.lon} "
                         f"({est.confidence}% · {est.n_receivers} receivers)")
         console.print_(f"  strongest receiver: {est.strongest}  ·  {est.detail}")
+        if args.geojson:
+            from .modules import geo
+            geo.write_geojson(args.geojson, geo.fix_geojson(
+                est.lat, est.lon,
+                {"method": "rssi-centroid", "confidence": est.confidence,
+                 "n_receivers": est.n_receivers},
+                reports if isinstance(reports, list) else None))
+            console.success(f"Wrote GeoJSON: {args.geojson}")
         return 0
 
     if sub == "gnss":
@@ -1353,6 +1391,24 @@ def cmd_config(args: argparse.Namespace, cfg: Config) -> int:
         path = save_config(cfg)
         console.success(f"Wrote default config to {path}")
         return 0
+    if args.config_cmd == "smtp":
+        if args.host is not None:
+            cfg.smtp_host = args.host
+        if args.port is not None:
+            cfg.smtp_port = args.port
+        if args.user is not None:
+            cfg.smtp_user = args.user
+        if args.password is not None:
+            cfg.smtp_password = args.password
+        if args.mail_from is not None:
+            cfg.smtp_from = args.mail_from
+        if args.no_tls:
+            cfg.smtp_use_tls = False
+        save_config(cfg)
+        console.success(f"SMTP configured (host {cfg.smtp_host or '(unset)'}, "
+                        f"port {cfg.smtp_port}, TLS {'on' if cfg.smtp_use_tls else 'off'}).")
+        console.print_("Add an email alert: rfhound automate add <name> <task> --email you@example.com")
+        return 0
     # show
     import json
     console.raw(json.dumps(cfg.to_dict(), indent=2))
@@ -1403,7 +1459,10 @@ def build_parser() -> argparse.ArgumentParser:
     pdev.set_defaults(func=cmd_device, device_cmd="info", a=None, b=None)
     pdoc = sub.add_parser("doctor", help="Check tools, HackRF device and config")
     pdoc.add_argument("--json", action="store_true", help="Machine-readable health output")
-    pdoc.set_defaults(func=cmd_doctor)
+    pdoc.add_argument("--rf", action="store_true",
+                      help="Show the RF front-end guide (antenna/filter/LNA per band)")
+    pdoc.add_argument("--freq", type=float, help="With --rf: recommend for this frequency (MHz)")
+    pdoc.set_defaults(func=cmd_doctor, rf=False, freq=None)
     sub.add_parser("menu", help="Launch the guided interactive menu").set_defaults(func=cmd_menu)
 
     pw = sub.add_parser("web", help="Launch the browser dashboard + REST API")
@@ -1650,6 +1709,7 @@ def build_parser() -> argparse.ArgumentParser:
     sil.add_argument("--hub", help="Pull TDOA contributions from this hub URL and solve")
     sil.add_argument("--trigger", help="Collection trigger tag to solve (default: latest)")
     sil.add_argument("--token", default="", help="Hub bearer token")
+    sil.add_argument("--geojson", help="Write the fix + receivers to a GeoJSON file")
     sil.add_argument("--simulate", action="store_true")
     sig = sisub.add_parser(
         "gnss", help="GNSS jamming/spoofing DETECTION from receiver observations (EP)")
@@ -1669,7 +1729,8 @@ def build_parser() -> argparse.ArgumentParser:
     psi.set_defaults(func=cmd_sigint, sigint_cmd=None, simulate=False,
                      start=430.0, stop=440.0, file=None, scan=False, clear=False,
                      tdoa=False, hub=None, trigger=None, token="",
-                     iq=None, sample_rate=2_000_000, static=False, known=None, json=False)
+                     iq=None, sample_rate=2_000_000, static=False, known=None,
+                     json=False, geojson=None)
 
     pau = sub.add_parser("automate", help="Automation: scheduled/looping RF tasks with alerting")
     ausub = pau.add_subparsers(dest="automate_cmd")
@@ -1690,6 +1751,7 @@ def build_parser() -> argparse.ArgumentParser:
     auadd.add_argument("--alert-on", dest="alert_on", default="threat",
                        choices=["threat", "always", "change"])
     auadd.add_argument("--webhook", help="POST alerts to this URL")
+    auadd.add_argument("--email", help="Email alerts here (needs SMTP config: rfhound config smtp)")
     aurm = ausub.add_parser("remove", help="Delete an automation")
     aurm.add_argument("name")
     auen = ausub.add_parser("enable", help="Enable an automation")
@@ -1742,7 +1804,16 @@ def build_parser() -> argparse.ArgumentParser:
     csub.add_parser("show", help="Print current config")
     csub.add_parser("init", help="Write a default config file")
     csub.add_parser("path", help="Print config file path")
-    pcfg.set_defaults(func=cmd_config, config_cmd="show")
+    csmtp = csub.add_parser("smtp", help="Configure SMTP for email alerts")
+    csmtp.add_argument("--host")
+    csmtp.add_argument("--port", type=int)
+    csmtp.add_argument("--user")
+    csmtp.add_argument("--password")
+    csmtp.add_argument("--from", dest="mail_from")
+    csmtp.add_argument("--no-tls", action="store_true", help="Disable STARTTLS")
+    pcfg.set_defaults(func=cmd_config, config_cmd="show",
+                      host=None, port=None, user=None, password=None,
+                      mail_from=None, no_tls=False)
 
     return p
 

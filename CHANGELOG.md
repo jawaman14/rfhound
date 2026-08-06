@@ -2,6 +2,24 @@
 
 All notable changes to RFHound. Versioning is [SemVer](https://semver.org/).
 
+## [Unreleased] — v1.3 (rebuild & beef-up)
+
+### Added
+- **VISION.md** — the project's purpose, aim, and explicit positioning vs other
+  SDR software; steers the UI and feature direction.
+- **Ground-up dashboard rebuild** (SDR-software-inspired): receiver bar (big
+  frequency readout, span, step/zoom, band-preset chips), dB-axed interactive
+  spectrum with a hover cursor and click-to-inspect, and new **Capture**,
+  **Recordings**, **Emitters (EOB)**, and **Sightings** panels. New endpoints:
+  `POST /api/capture` (receive-only, token-gated), `GET /api/recordings`,
+  `GET /api/emitters`.
+- **RF front-end guide** (`doctor --rf`, `--rf --freq MHz`) — antenna / filter /
+  LNA recommendation per band, from the collection-hardware notes.
+- **Email (SMTP) alerting** for automations (`automate add … --email`,
+  `config smtp …`) alongside webhooks.
+- **GeoJSON export** for geolocation fixes (`sigint locate … --geojson FILE`) —
+  emitter + receiver points for a map/GIS.
+
 ## [1.2.0] — 2026-08-06
 
 Enterprise hardening on top of 1.1: GNSS integrity monitoring, an authenticated

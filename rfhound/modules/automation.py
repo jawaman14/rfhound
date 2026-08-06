@@ -53,6 +53,7 @@ def _norm(a: dict) -> dict:
         "params": a.get("params", {}),
         "alert_on": a.get("alert_on", "threat"),
         "webhook": a.get("webhook", ""),
+        "email": a.get("email", ""),
         # Suppress repeat alerts for the same automation within this many seconds
         # (0 = alert every time). Keeps a standing condition from spamming.
         "alert_cooldown_s": int(a.get("alert_cooldown_s", 0)),
@@ -193,6 +194,31 @@ def _post_webhook(url: str, payload: dict) -> None:
         console.debug(f"webhook failed: {exc}")
 
 
+def send_email(cfg: Config, to: str, subject: str, body: str) -> bool:
+    """Send an alert email via the configured SMTP server. Best-effort."""
+    import smtplib
+    import ssl
+    from email.message import EmailMessage
+    if not (getattr(cfg, "smtp_host", "") and to):
+        return False
+    msg = EmailMessage()
+    msg["From"] = cfg.smtp_from or cfg.smtp_user or "rfhound@localhost"
+    msg["To"] = to
+    msg["Subject"] = subject
+    msg.set_content(body)
+    try:
+        with smtplib.SMTP(cfg.smtp_host, cfg.smtp_port or 587, timeout=10) as s:
+            if getattr(cfg, "smtp_use_tls", True):
+                s.starttls(context=ssl.create_default_context())
+            if cfg.smtp_user:
+                s.login(cfg.smtp_user, cfg.smtp_password)
+            s.send_message(msg)
+        return True
+    except Exception as exc:  # never break the loop on a mail failure
+        console.debug(f"email failed: {exc}")
+        return False
+
+
 def fire(cfg: Config, auto: dict, result: AutoResult, *, alerting: bool) -> dict:
     """Log the event and, if alerting, print + webhook. Returns the event dict."""
     a = _norm(auto)
@@ -202,9 +228,14 @@ def fire(cfg: Config, auto: dict, result: AutoResult, *, alerting: bool) -> dict
     log.parent.mkdir(parents=True, exist_ok=True)
     with log.open("a") as fh:
         fh.write(json.dumps(event) + "\n")
-    # Logging + webhook only; callers handle console display.
-    if alerting and a["webhook"]:
-        _post_webhook(a["webhook"], event)
+    # Logging + webhook/email only; callers handle console display.
+    if alerting:
+        if a["webhook"]:
+            _post_webhook(a["webhook"], event)
+        if a["email"]:
+            send_email(cfg, a["email"], f"RFHound alert: {a['name']} ({a['task']})",
+                       f"{result.summary}\n\ntask: {a['task']}\ndata: "
+                       f"{json.dumps(result.data, indent=2)}\n")
     return event
 
 
@@ -266,12 +297,12 @@ def run_scheduler(cfg: Config, *, simulate: bool, tick_s: float = 2.0,
 # --------------------------------------------------------------------------- #
 def add_automation(cfg: Config, name: str, task: str, *, interval_s: int = 60,
                    params: dict | None = None, alert_on: str = "threat",
-                   webhook: str = "", alert_cooldown_s: int = 0,
+                   webhook: str = "", email: str = "", alert_cooldown_s: int = 0,
                    persist: bool = True) -> dict:
     cfg.automations = [a for a in cfg.automations if a.get("name") != name]
     auto = {"name": name, "task": task, "interval_s": interval_s,
             "params": params or {}, "alert_on": alert_on, "webhook": webhook,
-            "alert_cooldown_s": alert_cooldown_s, "enabled": True}
+            "email": email, "alert_cooldown_s": alert_cooldown_s, "enabled": True}
     cfg.automations.append(auto)
     if persist:
         save_config(cfg)
