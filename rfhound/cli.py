@@ -1121,6 +1121,63 @@ def cmd_sigint(args: argparse.Namespace, cfg: Config) -> int:
         console.print_(f"  strongest receiver: {est.strongest}  ·  {est.detail}")
         return 0
 
+    if sub == "gnss":
+        import json
+        from .modules import gnss as gnss_mod
+        console.rule("GNSS interference & spoofing detection")
+
+        observations = []
+        if args.simulate:
+            sim_map = {"nominal": gnss_mod.simulate_nominal,
+                       "jamming": gnss_mod.simulate_jamming,
+                       "spoofing": gnss_mod.simulate_spoofing}
+            observations = sim_map[args.simulate]()
+            console.info(f"Simulated scenario: {args.simulate}")
+        elif args.file:
+            try:
+                raw = json.loads(Path(args.file).read_text())
+            except (OSError, ValueError) as exc:
+                console.error(f"Could not read observations: {exc}")
+                return 2
+            for o in raw:
+                observations.append(gnss_mod.GnssObservation(
+                    t=float(o.get("t", 0.0)),
+                    lat=o.get("lat"), lon=o.get("lon"), alt=o.get("alt"),
+                    cn0=list(o.get("cn0", [])), elevations=list(o.get("elevations", [])),
+                    agc=o.get("agc"), num_sats=o.get("num_sats"),
+                    fix=bool(o.get("fix", True))))
+
+        if observations:
+            known = tuple(args.known) if args.known else None
+            report = gnss_mod.detect_gnss_interference(
+                observations, known_location=known, static=args.static)
+            if report.status == "nominal":
+                console.success(f"Nominal — no interference indicators ({report.samples} obs).")
+            else:
+                console.error(f"{report.status.upper()} suspected ({report.confidence}% · "
+                              f"{report.samples} obs)")
+                for f in report.findings:
+                    tag = "JAM" if f.kind == "jamming" else "SPOOF"
+                    console.print_(f"  [{tag}/{f.severity}] {f.indicator}: {f.detail}")
+        elif not args.iq:
+            console.error("Provide --simulate [scenario], --file observations.json, or --iq capture.")
+            return 1
+
+        if args.iq:
+            from .modules import iqtools
+            try:
+                iq = iqtools.load_iq(Path(args.iq))
+                l1 = gnss_mod.analyze_l1_power(iq, args.sample_rate)
+            except (RuntimeError, OSError, ImportError) as exc:
+                console.error(f"L1 power check failed (needs NumPy + IQ file): {exc}")
+                return 2
+            if l1.get("anomaly"):
+                console.error(f"L1 anomaly: {l1['note']} "
+                              f"(power {l1.get('power')}, flatness {l1.get('flatness')})")
+            else:
+                console.success(f"L1 check: {l1['note']}")
+        return 0
+
     console.error("Unknown sigint subcommand.")
     return 1
 
@@ -1450,9 +1507,24 @@ def build_parser() -> argparse.ArgumentParser:
     sil.add_argument("--trigger", help="Collection trigger tag to solve (default: latest)")
     sil.add_argument("--token", default="", help="Hub bearer token")
     sil.add_argument("--simulate", action="store_true")
+    sig = sisub.add_parser(
+        "gnss", help="GNSS jamming/spoofing DETECTION from receiver observations (EP)")
+    sig.add_argument("--file", help="JSON array of GNSS observations "
+                     "[{t,lat,lon,alt,cn0[],elevations[],agc,num_sats,fix}, ...]")
+    sig.add_argument("--iq", help="IQ capture near L1 (1575.42 MHz) for a power/carrier check")
+    sig.add_argument("--sample-rate", type=int, default=2_000_000,
+                     help="Sample rate of the --iq capture (Hz)")
+    sig.add_argument("--static", action="store_true",
+                     help="Receiver is fixed — flag any reported movement as spoofing")
+    sig.add_argument("--known", nargs=2, type=float, metavar=("LAT", "LON"),
+                     help="Known receiver location; flag disagreement as spoofing")
+    sig.add_argument("--simulate", nargs="?", const="spoofing",
+                     choices=["nominal", "jamming", "spoofing"],
+                     help="Run a built-in scenario (default: spoofing)")
     psi.set_defaults(func=cmd_sigint, sigint_cmd=None, simulate=False,
                      start=430.0, stop=440.0, file=None, scan=False, clear=False,
-                     tdoa=False, hub=None, trigger=None, token="")
+                     tdoa=False, hub=None, trigger=None, token="",
+                     iq=None, sample_rate=2_000_000, static=False, known=None)
 
     pau = sub.add_parser("automate", help="Automation: scheduled/looping RF tasks with alerting")
     ausub = pau.add_subparsers(dest="automate_cmd")

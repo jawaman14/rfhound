@@ -65,6 +65,46 @@ rfhound sigint locate --file reports.json   # [{"node","lat","lon","rssi"}, ...]
 
 A single receiver's RSSI cannot localise; this needs ≥2–3 positioned receivers.
 
+## GNSS jamming & spoofing detection — `sigint gnss`
+
+Electronic **Protection** for GNSS: ingest a receiver's observations — per-satellite
+C/N0, AGC, position/time, satellite elevations — and flag the indicators of
+**jamming** (denial) and **spoofing** (a false position/time). Receive-and-analyse
+only; RFHound **never** transmits on GNSS frequencies (see [LEGAL.md](LEGAL.md)).
+
+What it looks for:
+
+| Indicator | Signature | Verdict |
+|-----------|-----------|---------|
+| `fix-loss` / `low-cn0` | C/N0 collapse, fix dropped | jamming |
+| `agc-spike` | receiver AGC jumps (front-end desense) | jamming |
+| `uniform-cn0` | many sats at near-identical, high C/N0 | spoofing |
+| `elevation-decorrelation` | C/N0 doesn't rise with elevation | spoofing |
+| `position-jump` | impossible speed between fixes | spoofing / meaconing |
+| `static-moved` / `location-mismatch` | fixed receiver "moves", or disagrees with a known site | spoofing |
+
+```bash
+rfhound sigint gnss --simulate nominal        # healthy constellation
+rfhound sigint gnss --simulate jamming        # C/N0 collapse + AGC spike + fix loss
+rfhound sigint gnss --simulate spoofing --static
+
+# From real receiver logs (NMEA/UBX exported to JSON):
+rfhound sigint gnss --file observations.json --static
+#   observations.json: [{"t","lat","lon","alt","cn0":[...],
+#                        "elevations":[...],"agc","num_sats","fix"}, ...]
+rfhound sigint gnss --file observations.json --known 51.5 -0.12   # known site
+
+# Light L1 IQ check — genuine GPS sits *below* the noise floor, so a carrier
+# or elevated in-band power at 1575.42 MHz is itself suspicious:
+rfhound capture 1575 2 --name l1
+rfhound sigint gnss --iq <captures>/l1.sigmf-data --sample-rate 2000000
+```
+
+Use `--static` for a fixed installation (any reported movement is spoofing) or
+`--known LAT LON` when the true position is known. Pair with the TDOA module to
+*locate* a spoofer/jammer, and with `defense respond gps_spoof` for the playbook.
+The L1 IQ check needs NumPy (`pip install rfhound[iq]`).
+
 ### Precise fixes — TDOA multilateration — `sigint locate --tdoa`
 
 For a precise fix, use **time-difference-of-arrival** across ≥3 *synchronised*

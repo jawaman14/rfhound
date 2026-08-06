@@ -2,6 +2,18 @@
 
 All notable changes to RFHound. Versioning is [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- **GNSS jamming & spoofing detection (`sigint gnss`)** — Electronic Protection
+  for GNSS. Ingests receiver observations (per-sat C/N0, AGC, position/time,
+  satellite elevations) and flags jamming (C/N0 collapse, AGC spike, fix loss)
+  and spoofing (uniform/high C/N0, elevation-decorrelated C/N0, impossible-speed
+  position jumps, a static receiver that "moves" or disagrees with a known site).
+  Includes a light L1 IQ check (genuine GPS sits below the noise floor) and
+  built-in `nominal`/`jamming`/`spoofing` simulators. Receive-only — RFHound
+  never transmits on GNSS frequencies.
+
 ## [1.1.0] — 2026-08-04
 
 Everything since 1.0 — SIGINT/EW-support, automation, an AI console, recordings,
