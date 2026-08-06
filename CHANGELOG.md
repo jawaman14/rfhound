@@ -26,6 +26,9 @@ All notable changes to RFHound. Versioning is [SemVer](https://semver.org/).
   `deploy/` for an unattended, receive-only, token-gated sensor node.
 - **NDJSON alert stream** — `rfhound automate run --ndjson` emits each event as
   one JSON line to stdout, a SIEM feed to pipe into a collector.
+- **Jamming characterisation from IQ** (`sigint jamming --file`, `--iq-kind`) —
+  classifies swept/chirp and pulsed jammers (plus barrage and spot/CW) from a
+  capture's spectrogram, catching agile jammers a single sweep misses.
 
 ### Removed
 - Dead code: unused `console.live_lines`/`make_text` helpers (and their now-orphan

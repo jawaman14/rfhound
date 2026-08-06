@@ -37,6 +37,18 @@ rfhound sigint jamming 433 435 --simulate
 Pair it with `defense monitor` (which *detects* jamming) — this tells you *what
 kind*, which drives the right anti-jam response.
 
+**From an IQ capture** (`--file`) it also catches jammers a single sweep misses —
+**swept/chirp** (the peak frequency drifts across the band) and **pulsed** (energy
+toggles on/off) — via the capture's spectrogram, alongside barrage and spot/CW:
+
+```bash
+rfhound sigint jamming --file <captures>/jammer.sigmf-data
+rfhound sigint jamming --iq-kind swept    # demo on synthetic IQ (no capture)
+```
+
+Needs NumPy (`pip install rfhound[iq]`). A noise-like capture reads as barrage —
+confirm it's jamming (not ambient) against a quiet baseline (`defense baseline`).
+
 ## Emitter catalogue / Electronic Order of Battle — `sigint emitters`
 
 A persistent catalogue of observed emitters with their parameters (frequency,

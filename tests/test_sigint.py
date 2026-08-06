@@ -3,6 +3,27 @@ import pytest
 from rfhound.modules import sigint
 
 
+# --- jamming characterisation from IQ (needs numpy) ---
+@pytest.mark.parametrize("kind,expect", [
+    ("swept", "swept/chirp"),
+    ("pulsed", "pulsed"),
+    ("cw", "spot/cw"),
+    ("barrage", "barrage"),
+])
+def test_classify_jamming_iq(kind, expect):
+    pytest.importorskip("numpy")
+    iq = sigint.simulate_jamming_iq(kind)
+    prof = sigint.classify_jamming_iq(iq, 2_000_000)
+    assert prof.kind == expect, (kind, prof.kind, prof.metrics)
+
+
+def test_classify_jamming_iq_too_few_samples():
+    pytest.importorskip("numpy")
+    import numpy as np
+    prof = sigint.classify_jamming_iq(np.zeros(10, dtype=np.complex64), 2_000_000)
+    assert prof.kind == "none"
+
+
 # --- interference characterisation (no numpy) ---
 def test_barrage_jamming():
     spectrum = [-40.0] * 100  # whole band raised

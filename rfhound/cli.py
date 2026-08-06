@@ -1154,10 +1154,26 @@ def cmd_sigint(args: argparse.Namespace, cfg: Config) -> int:
         return 0
 
     if sub == "jamming":
+        console.rule("Interference / jamming characterisation")
+        if args.file or args.iq_kind:
+            # IQ-based: catches swept/chirp and pulsed jammers a sweep misses.
+            if args.iq_kind:
+                iq = sigint.simulate_jamming_iq(args.iq_kind)
+                prof = sigint.classify_jamming_iq(iq, 2_000_000)
+                console.info(f"Simulated {args.iq_kind} jammer IQ")
+            else:
+                try:
+                    prof = sigint.classify_jamming_iq_file(Path(args.file))
+                except (RuntimeError, OSError, ImportError) as exc:
+                    console.error(f"Could not analyse IQ (needs NumPy + capture): {exc}")
+                    return 2
+            (console.error if prof.kind not in ("none",) else console.success)(
+                f"Jamming type: {prof.kind.upper()} ({prof.confidence}%)")
+            console.print_(f"  {prof.detail}")
+            return 0 if prof.kind == "none" else 1
         result = sweep_mod.sweep(cfg, args.start, args.stop, simulate=sim)
         spectrum = [b.power_db for b in result.bins]
         prof = sigint.characterize_interference(spectrum, result.noise_floor_db)
-        console.rule("Interference / jamming characterisation")
         if prof.kind == "none":
             console.success(f"No jamming signature (occupancy {prof.occupancy:.0%}).")
             return 0
@@ -1731,9 +1747,14 @@ def build_parser() -> argparse.ArgumentParser:
     sisub = psi.add_subparsers(dest="sigint_cmd")
     sip = sisub.add_parser("pulse", help="ELINT pulse analysis (PW/PRI) from an IQ capture")
     sip.add_argument("--file", help="IQ capture (.sigmf-data)")
-    sij = sisub.add_parser("jamming", help="Characterise interference type on a band")
-    sij.add_argument("start", type=float, help="Start MHz")
-    sij.add_argument("stop", type=float, help="Stop MHz")
+    sij = sisub.add_parser("jamming", help="Characterise interference type (sweep or IQ)")
+    sij.add_argument("start", type=float, nargs="?", default=433.0, help="Start MHz")
+    sij.add_argument("stop", type=float, nargs="?", default=435.0, help="Stop MHz")
+    sij.add_argument("--file", help="Characterise a jammer from an IQ capture "
+                     "(.sigmf-data) — catches swept/chirp & pulsed jammers")
+    sij.add_argument("--iq-kind", dest="iq_kind",
+                     choices=["barrage", "cw", "swept", "pulsed"],
+                     help="Demo the IQ classifier on a synthetic jammer of this type")
     sij.add_argument("--simulate", action="store_true")
     sie = sisub.add_parser("emitters", help="Emitter catalogue / Electronic Order of Battle")
     sie.add_argument("--scan", action="store_true", help="Sweep and ingest peaks first")
@@ -1769,7 +1790,7 @@ def build_parser() -> argparse.ArgumentParser:
                      start=430.0, stop=440.0, file=None, scan=False, clear=False,
                      tdoa=False, hub=None, trigger=None, token="",
                      iq=None, sample_rate=2_000_000, static=False, known=None,
-                     json=False, geojson=None)
+                     json=False, geojson=None, iq_kind=None)
 
     pau = sub.add_parser("automate", help="Automation: scheduled/looping RF tasks with alerting")
     ausub = pau.add_subparsers(dest="automate_cmd")

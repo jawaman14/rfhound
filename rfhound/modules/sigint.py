@@ -142,6 +142,120 @@ def characterize_interference(spectrum: list, floor_db: float, *, snr_db: float 
 
 
 # --------------------------------------------------------------------------- #
+# 2b. Jamming characterisation from an IQ capture (swept/chirp & pulsed)
+# --------------------------------------------------------------------------- #
+@dataclass
+class IqJammingProfile:
+    kind: str            # none | barrage | spot/cw | swept/chirp | pulsed | multi-tone
+    confidence: int
+    duty: float
+    detail: str
+    metrics: dict
+
+
+def classify_jamming_iq(iq, sample_rate: int, *, n_slices: int = 64) -> IqJammingProfile:
+    """Classify a jammer from an IQ capture via its spectrogram.
+
+    Catches jammer types a single sweep can miss:
+      * swept / chirp — the peak frequency drifts across the band over time
+      * pulsed — the energy toggles on/off
+      * barrage — broadband, continuous, high band occupancy
+      * spot / CW — one dominant narrowband carrier, continuous
+    Needs NumPy (`rfhound[iq]`).
+    """
+    import numpy as np
+    a = np.asarray(iq)
+    if a.size < 256:
+        return IqJammingProfile("none", 0, 0.0, "too few samples", {})
+    n_slices = max(8, min(n_slices, a.size // 16))
+    frame = a.size // n_slices
+    frames = a[:frame * n_slices].reshape(n_slices, frame)
+    win = np.hanning(frame)
+    spec = np.abs(np.fft.fftshift(np.fft.fft(frames * win, axis=1), axes=1)) ** 2  # [t, f]
+
+    nbins = spec.shape[1]
+    pwr = spec.sum(axis=1)
+    pwr_n = pwr / (pwr.max() + 1e-12)
+    active = pwr_n > 0.25
+    duty = float(active.mean())
+
+    # Per-frame peak concentration over the active frames: ~1/nbins for flat
+    # noise, ~0.3–0.6 when a narrowband tone dominates the frame. This is the
+    # key structured-signal (tone) vs noise-like (barrage) discriminator.
+    use = np.where(active)[0]
+    if use.size == 0:
+        use = np.arange(n_slices)
+    per_frame_conc = float(np.mean(spec[use].max(axis=1) / (spec[use].sum(axis=1) + 1e-12)))
+    structured = per_frame_conc > 8.0 / nbins   # well above the flat-noise baseline
+
+    peak_pos = spec.argmax(axis=1) / nbins       # 0..1 per frame
+    active_pos = peak_pos[use]
+    peak_range = float(active_pos.max() - active_pos.min()) if active_pos.size else 0.0
+    peak_std = float(active_pos.std()) if active_pos.size else 0.0
+
+    avg = spec.mean(axis=0)
+    tone_thresh = avg.max() * 0.5
+    tones = int(((avg[1:-1] > tone_thresh) & (avg[1:-1] >= avg[:-2])
+                 & (avg[1:-1] >= avg[2:])).sum())
+
+    m = {"duty": round(duty, 3), "per_frame_conc": round(per_frame_conc, 4),
+         "structured": structured, "peak_range": round(peak_range, 3),
+         "peak_std": round(peak_std, 3), "tones": tones}
+
+    # Noise-like (no per-frame tone) => broadband. From a bare snippet this is a
+    # barrage signature; confirm against a quiet baseline to rule out ambient.
+    if not structured:
+        return IqJammingProfile(
+            "barrage", 70, round(duty, 3),
+            "broadband, no narrowband structure — barrage/noise jamming "
+            "(confirm against a quiet baseline: `rfhound defense baseline`).", m)
+
+    # Structured (a tone is present each frame): pulsed / swept / spot / multi-tone.
+    if duty < 0.6 and (~active).any():
+        return IqJammingProfile("pulsed", 82, round(duty, 3),
+                                f"energy toggles on/off (duty {duty:.0%}) — pulsed jammer.", m)
+    if peak_range > 0.45 and peak_std > 0.12:
+        return IqJammingProfile("swept/chirp", 84, round(duty, 3),
+                                f"peak frequency sweeps across {peak_range:.0%} of the band — "
+                                f"swept/chirp jammer.", m)
+    if 2 <= tones <= 12:
+        return IqJammingProfile("multi-tone", 62, round(duty, 3),
+                                f"{tones} strong tones — multi-tone jammer.", m)
+    return IqJammingProfile("spot/cw", 80, round(duty, 3),
+                            "one dominant continuous carrier — spot/CW jammer.", m)
+
+
+def classify_jamming_iq_file(data_path: Path, *, max_samples: int = 1_000_000) -> IqJammingProfile:
+    from . import iqtools
+    meta = iqtools.read_sigmf_meta(data_path)
+    iq = iqtools.load_iq(data_path, max_samples=max_samples)
+    return classify_jamming_iq(iq, meta.sample_rate)
+
+
+def simulate_jamming_iq(kind: str, *, n: int = 8192, sample_rate: int = 2_000_000):
+    """Synthetic IQ for a jammer type: barrage | cw | swept | pulsed | none."""
+    import numpy as np
+    t = np.arange(n) / sample_rate
+    rng = np.random.default_rng(0)
+    noise = (rng.standard_normal(n) + 1j * rng.standard_normal(n)) * 0.05
+    if kind == "barrage":
+        sig = (rng.standard_normal(n) + 1j * rng.standard_normal(n)) * 1.0
+    elif kind in ("cw", "spot"):
+        sig = np.exp(2j * np.pi * 0.2 * sample_rate * t)
+    elif kind in ("swept", "chirp"):
+        f0, f1 = -0.45 * sample_rate, 0.45 * sample_rate
+        phase = 2 * np.pi * (f0 * t + 0.5 * (f1 - f0) / t[-1] * t ** 2)
+        sig = np.exp(1j * phase)
+    elif kind == "pulsed":
+        carrier = np.exp(2j * np.pi * 0.1 * sample_rate * t)
+        env = ((np.arange(n) // (n // 16)) % 2).astype(float)
+        sig = carrier * env
+    else:  # none / quiet
+        sig = np.zeros(n, dtype=complex)
+    return (sig + noise).astype(np.complex64)
+
+
+# --------------------------------------------------------------------------- #
 # 3. Emitter catalogue (Electronic Order of Battle)
 # --------------------------------------------------------------------------- #
 def emitters_path() -> Path:
