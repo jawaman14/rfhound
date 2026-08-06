@@ -30,8 +30,8 @@ def test_menu_quit_immediately(monkeypatch):
 
 
 def test_menu_identify_then_quit(monkeypatch, capsys):
-    # 3 = Identify; enter 1090; then Quit.
-    _feed(monkeypatch, ["3", "1090", str(len(menu.MENU))])
+    # 4 = Identify; enter 1090; then Quit.
+    _feed(monkeypatch, ["4", "1090", str(len(menu.MENU))])
     menu.run_menu(Config(simulate_mode=True))
     out = capsys.readouterr().out
     assert "ADS-B" in out
@@ -44,8 +44,8 @@ def test_menu_bad_choice_recovers(monkeypatch, capsys):
 
 
 def test_menu_threats_submenu(monkeypatch, capsys):
-    # 4 = Threats; 4 = IMSI catcher; 7 = Back; Quit.
-    _feed(monkeypatch, ["4", "4", "7", str(len(menu.MENU))])
+    # 5 = Threats; 4 = IMSI catcher; 7 = Back; Quit.
+    _feed(monkeypatch, ["5", "4", "7", str(len(menu.MENU))])
     menu.run_menu(Config(simulate_mode=True))
     out = capsys.readouterr().out
     assert "Rogue-BTS" in out or "likelihood" in out

@@ -21,6 +21,7 @@ from .modules import recon as recon_mod
 from .modules import response as response_mod
 from .modules import sweep as sweep_mod
 from .modules import toolbox as toolbox_mod
+from .modules import wifi as wifi_mod
 
 
 def _hardware_or_simulate() -> bool:
@@ -63,6 +64,19 @@ def _menu_sweep(cfg: Config, simulate: bool) -> None:
                       ["Freq (MHz)", "Power dB", "Bandwidth", "Likely signal", "Decoder"], rows)
     else:
         console.warn("No peaks found.")
+
+
+def _menu_wifi(cfg: Config, simulate: bool) -> None:
+    console.rule("Wi-Fi channel survey (2.4 / 5 GHz)")
+    choice = console.ask("Band (2.4 / 5 / both)", default="both").strip().lower()
+    band = choice if choice in ("2.4", "5", "both") else "both"
+    bands = ["2.4", "5"] if band == "both" else [band]
+    for b in bands:
+        with console.status(f"Surveying Wi-Fi {b} GHz…"):
+            survey = wifi_mod.survey_band(cfg, b, simulate=simulate)
+        wifi_mod.summarize(survey)
+    console.print_("Receive-only: this shows channel congestion, not SSIDs. "
+                   "Interference? Use the Threat detection menu.")
 
 
 def _menu_identify(cfg: Config, simulate: bool) -> None:
@@ -238,6 +252,7 @@ def _menu_doctor(cfg: Config) -> None:
 MENU = [
     ("Recon survey (what's around me?)", lambda c, s: _menu_recon(c, s)),
     ("Spectrum sweep (+ auto-identify)", lambda c, s: _menu_sweep(c, s)),
+    ("Wi-Fi channel survey (2.4/5 GHz)", lambda c, s: _menu_wifi(c, s)),
     ("Identify a frequency / protocol", lambda c, s: _menu_identify(c, s)),
     ("Threat detection", lambda c, s: _menu_threats(c, s)),
     ("Protocol decoders", lambda c, s: _menu_decoders(c, s)),

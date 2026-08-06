@@ -28,6 +28,7 @@ from .modules import recon as recon_mod
 from .modules import replay as replay_mod
 from .modules import report as report_mod
 from .modules import sweep as sweep_mod
+from .modules import wifi as wifi_mod
 
 
 # --------------------------------------------------------------------------- #
@@ -362,6 +363,36 @@ def cmd_recon(args: argparse.Namespace, cfg: Config) -> int:
         fmt = "html" if out.suffix.lower() in (".html", ".htm") else "md"
         report_mod.write_report(report, out, fmt=fmt)
         console.success(f"Report written to {out}")
+    return 0
+
+
+def cmd_wifi(args: argparse.Namespace, cfg: Config) -> int:
+    if args.wifi_cmd == "channels":
+        band = args.band or "both"
+        rows = [
+            [str(ch.number), "2.4 GHz" if ch.band == "2.4" else "5 GHz",
+             f"{ch.center_mhz:.0f}", f"{ch.width_mhz}",
+             "DFS" if ch.dfs else "-", ch.note or "-"]
+            for ch in wifi_mod.channels_for(band)
+        ]
+        console.table("Wi-Fi channel plan", ["Ch", "Band", "Center MHz",
+                      "Width", "DFS", "Note"], rows)
+        console.print_("\nSurvey occupancy:  rfhound wifi survey [--band 2.4|5|both]")
+        return 0
+
+    # survey
+    bands = ["2.4", "5"] if args.band in (None, "both") else [args.band]
+    any_busy = False
+    for band in bands:
+        with console.status(f"Surveying Wi-Fi {band} GHz…"):
+            survey = wifi_mod.survey_band(
+                cfg, band, snr_db=args.snr, simulate=args.simulate,
+            )
+        wifi_mod.summarize(survey)
+        any_busy = any_busy or bool(survey.busy_channels)
+    console.print_("\nInterference/jamming on these bands?  "
+                   "rfhound defense monitor <start> <stop>  ·  "
+                   "rfhound sigint jamming <start> <stop>")
     return 0
 
 
@@ -1266,6 +1297,18 @@ def build_parser() -> argparse.ArgumentParser:
     pr.add_argument("--report", help="Write a report to this path (.md or .html)")
     pr.add_argument("--simulate", action="store_true", help="Synthesise data (no hardware)")
     pr.set_defaults(func=cmd_recon)
+
+    pwf = sub.add_parser("wifi", help="Wi-Fi 2.4/5 GHz channel survey (receive-only)")
+    wfsub = pwf.add_subparsers(dest="wifi_cmd")
+    wfc = wfsub.add_parser("channels", help="List the Wi-Fi channel plan")
+    wfc.add_argument("--band", choices=["2.4", "5", "both"], help="Filter by band")
+    wfs = wfsub.add_parser("survey", help="Survey channel occupancy + recommend the clearest")
+    wfs.add_argument("--band", choices=["2.4", "5", "both"], default="both",
+                     help="Band to survey (default both)")
+    wfs.add_argument("--snr", type=float, default=8.0,
+                     help="dB over the noise floor that counts a bin as occupied")
+    wfs.add_argument("--simulate", action="store_true", help="Synthesise data (no hardware)")
+    pwf.set_defaults(func=cmd_wifi, wifi_cmd="survey", band="both", snr=8.0, simulate=False)
 
     pc = sub.add_parser("capture", help="Record IQ to disk (with SigMF metadata)")
     pc.add_argument("freq", type=float, help="Center frequency (MHz)")
