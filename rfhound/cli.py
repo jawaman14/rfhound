@@ -34,6 +34,14 @@ from .modules import sweep as sweep_mod
 # Subcommand handlers
 # --------------------------------------------------------------------------- #
 def cmd_doctor(args: argparse.Namespace, cfg: Config) -> int:
+    if getattr(args, "json", False):
+        import json
+        from .web.server import status_dict
+        data = status_dict(cfg)
+        data["config_path"] = str(config_path())
+        data["output_dir"] = cfg.output_dir
+        console.raw(json.dumps(data, indent=2))
+        return 0
     console.rule("Environment check")
     # External tools.
     rows = []
@@ -176,7 +184,7 @@ def cmd_classify(args: argparse.Namespace, cfg: Config) -> int:
     matches = classify_mod.classify(freq, bandwidth_khz=bw, modulation=mod)
     if args.json:
         import json
-        console.print_(json.dumps([{
+        console.raw(json.dumps([{
             "name": m.name, "likelihood": m.likelihood, "decoder": m.decoder,
             "category": m.category, "reasons": m.reasons} for m in matches], indent=2))
         return 0
@@ -205,7 +213,7 @@ def cmd_at(args: argparse.Namespace, cfg: Config) -> int:
         return 1
     if args.json:
         import json
-        console.print_(json.dumps({
+        console.raw(json.dumps({
             "freq_mhz": args.freq, "band": tb.band.name, "category": tb.band.category,
             "range_mhz": [tb.band.low_hz / 1e6, tb.band.high_hz / 1e6],
             "decoders": tb.decoders, "detectors": tb.detectors,
@@ -247,7 +255,7 @@ def cmd_tune(args: argparse.Namespace, cfg: Config) -> int:
         return 1
     if args.json:
         import json
-        console.print_(json.dumps([m.__dict__ for m in matches], indent=2))
+        console.raw(json.dumps([m.__dict__ for m in matches], indent=2))
         return 0
     rows = [[f"{m.tune_mhz:.4f}", m.name, f"{m.low_mhz:.3f}–{m.high_mhz:.3f}",
              m.category, m.decoder or "—"] for m in matches]
@@ -399,7 +407,7 @@ def cmd_recordings(args: argparse.Namespace, cfg: Config) -> int:
             console.error(f"No recording named '{args.name}' in {cfg.output_dir}")
             return 1
         import json
-        console.print_(json.dumps(recordings._read_meta(rec.meta_path), indent=2))
+        console.raw(json.dumps(recordings._read_meta(rec.meta_path), indent=2))
         return 0
     if args.rec_cmd == "classify":
         rec = recordings.find_recording(cfg.output_dir, args.name)
@@ -1131,7 +1139,9 @@ def cmd_sigint(args: argparse.Namespace, cfg: Config) -> int:
     if sub == "gnss":
         import json
         from .modules import gnss as gnss_mod
-        console.rule("GNSS interference & spoofing detection")
+        as_json = getattr(args, "json", False)
+        if not as_json:
+            console.rule("GNSS interference & spoofing detection")
 
         observations = []
         if args.simulate:
@@ -1139,7 +1149,8 @@ def cmd_sigint(args: argparse.Namespace, cfg: Config) -> int:
                        "jamming": gnss_mod.simulate_jamming,
                        "spoofing": gnss_mod.simulate_spoofing}
             observations = sim_map[args.simulate]()
-            console.info(f"Simulated scenario: {args.simulate}")
+            if not as_json:
+                console.info(f"Simulated scenario: {args.simulate}")
         elif args.file:
             try:
                 raw = json.loads(Path(args.file).read_text())
@@ -1154,10 +1165,19 @@ def cmd_sigint(args: argparse.Namespace, cfg: Config) -> int:
                     agc=o.get("agc"), num_sats=o.get("num_sats"),
                     fix=bool(o.get("fix", True))))
 
+        report = None
         if observations:
             known = tuple(args.known) if args.known else None
             report = gnss_mod.detect_gnss_interference(
                 observations, known_location=known, static=args.static)
+            if as_json:
+                console.raw(json.dumps({
+                    "status": report.status, "confidence": report.confidence,
+                    "samples": report.samples,
+                    "findings": [{"indicator": f.indicator, "kind": f.kind,
+                                  "severity": f.severity, "detail": f.detail}
+                                 for f in report.findings]}, indent=2))
+                return 0 if report.status == "nominal" else 1
             if report.status == "nominal":
                 console.success(f"Nominal — no interference indicators ({report.samples} obs).")
             else:
@@ -1227,7 +1247,7 @@ def cmd_config(args: argparse.Namespace, cfg: Config) -> int:
         return 0
     # show
     import json
-    console.print_(json.dumps(cfg.to_dict(), indent=2))
+    console.raw(json.dumps(cfg.to_dict(), indent=2))
     return 0
 
 
@@ -1273,7 +1293,9 @@ def build_parser() -> argparse.ArgumentParser:
     devop.add_argument("--b", help="Port for primary B")
     devsub.add_parser("clock", help="Read clock reference status")
     pdev.set_defaults(func=cmd_device, device_cmd="info", a=None, b=None)
-    sub.add_parser("doctor", help="Check tools, HackRF device and config").set_defaults(func=cmd_doctor)
+    pdoc = sub.add_parser("doctor", help="Check tools, HackRF device and config")
+    pdoc.add_argument("--json", action="store_true", help="Machine-readable health output")
+    pdoc.set_defaults(func=cmd_doctor)
     sub.add_parser("menu", help="Launch the guided interactive menu").set_defaults(func=cmd_menu)
 
     pw = sub.add_parser("web", help="Launch the browser dashboard + REST API")
@@ -1531,10 +1553,11 @@ def build_parser() -> argparse.ArgumentParser:
     sig.add_argument("--simulate", nargs="?", const="spoofing",
                      choices=["nominal", "jamming", "spoofing"],
                      help="Run a built-in scenario (default: spoofing)")
+    sig.add_argument("--json", action="store_true", help="Machine-readable output")
     psi.set_defaults(func=cmd_sigint, sigint_cmd=None, simulate=False,
                      start=430.0, stop=440.0, file=None, scan=False, clear=False,
                      tdoa=False, hub=None, trigger=None, token="",
-                     iq=None, sample_rate=2_000_000, static=False, known=None)
+                     iq=None, sample_rate=2_000_000, static=False, known=None, json=False)
 
     pau = sub.add_parser("automate", help="Automation: scheduled/looping RF tasks with alerting")
     ausub = pau.add_subparsers(dest="automate_cmd")

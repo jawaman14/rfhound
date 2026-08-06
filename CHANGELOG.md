@@ -5,6 +5,22 @@ All notable changes to RFHound. Versioning is [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **Web dashboard authentication** — optional bearer-token auth on all `/api/…`
+  endpoints (`rfhound web --token`), auto-generated when binding to a
+  non-localhost host, with a warning when exposed without one. Token accepted as
+  a Bearer header, `X-RFHound-Token`, `?token=`, or the `rfh_token` cookie; the
+  HTML shell captures it into `sessionStorage`. Defensive response headers added.
+- **Machine-readable output (`--json`)** on `doctor` and `sigint gnss` (joining
+  `at`/`tune`/`classify`) for SIEM/automation; non-nominal GNSS exits non-zero.
+- **Interactive menu parity** — a SIGINT/EW submenu (interference, emitter
+  catalogue, geolocation, GNSS spoof detection) and a captures/recordings entry.
+
+### Fixed
+- JSON output is written verbatim (via `console.raw`) instead of through the
+  rich console, which soft-wrapped long values and produced invalid JSON.
+- Corrected the project Homepage/URLs to the standalone `jawaman14/rfhound`
+  repository; CI now lints `tests/` alongside `rfhound/`.
+
 - **GNSS jamming & spoofing detection (`sigint gnss`)** — Electronic Protection
   for GNSS. Ingests receiver observations (per-sat C/N0, AGC, position/time,
   satellite elevations) and flags jamming (C/N0 collapse, AGC spike, fix loss)

@@ -1,8 +1,36 @@
+import json
+
+import pytest
+
 from rfhound import cli
 
 
 def run(argv):
     return cli.main(argv)
+
+
+@pytest.mark.parametrize("argv", [
+    ["doctor", "--json"],
+    ["at", "433.92", "--json"],
+    ["tune", "adsb", "--json"],
+    ["classify", "1090", "--json"],
+    ["sigint", "gnss", "--simulate", "spoofing", "--static", "--json"],
+    ["sigint", "gnss", "--simulate", "nominal", "--json"],
+])
+def test_json_output_is_parseable(argv, capsys):
+    # Guards against the console re-wrapping JSON to terminal width (which
+    # injected mid-string newlines and produced invalid JSON).
+    run(argv)
+    out = capsys.readouterr().out
+    parsed = json.loads(out)
+    assert parsed is not None
+
+
+def test_gnss_json_reports_spoofing(capsys):
+    rc = run(["sigint", "gnss", "--simulate", "spoofing", "--static", "--json"])
+    data = json.loads(capsys.readouterr().out)
+    assert data["status"] == "spoofing"
+    assert rc == 1  # non-nominal => non-zero exit for scripting
 
 
 def test_version_exits_zero(capsys):

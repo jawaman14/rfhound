@@ -77,6 +77,16 @@ def print_(msg: str = "", style: str | None = None) -> None:
         _plain(msg)
 
 
+def raw(msg: str = "") -> None:
+    """Write text verbatim to stdout with no rich formatting or soft-wrapping.
+
+    Use this for machine-readable output (JSON): the rich console re-wraps to
+    the terminal width and would inject newlines mid-string, corrupting it.
+    """
+    import sys
+    sys.stdout.write(msg + "\n")
+
+
 def info(msg: str) -> None:
     if _HAVE_RICH:
         _console.print(f"[cyan]›[/cyan] {msg}")

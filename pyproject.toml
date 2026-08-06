@@ -30,7 +30,10 @@ dev = ["pytest>=7.0", "flake8>=6.0", "numpy>=1.21"]
 rfhound = "rfhound.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/jawaman14/AutoGPT/tree/main/rfhound"
+Homepage = "https://github.com/jawaman14/rfhound"
+Repository = "https://github.com/jawaman14/rfhound"
+Issues = "https://github.com/jawaman14/rfhound/issues"
+Changelog = "https://github.com/jawaman14/rfhound/blob/main/CHANGELOG.md"
 
 [tool.setuptools.packages.find]
 include = ["rfhound*"]

@@ -21,6 +21,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
       - name: Lint
-        run: flake8 rfhound --max-line-length=110 --extend-ignore=E203,W503
+        run: flake8 rfhound tests --max-line-length=110 --extend-ignore=E203,W503
       - name: Test
         run: pytest -q

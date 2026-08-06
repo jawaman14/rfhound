@@ -105,6 +105,13 @@ Use `--static` for a fixed installation (any reported movement is spoofing) or
 *locate* a spoofer/jammer, and with `defense respond gps_spoof` for the playbook.
 The L1 IQ check needs NumPy (`pip install rfhound[iq]`).
 
+Add `--json` for machine-readable output (SIEM/automation); a non-nominal verdict
+exits non-zero, so it drops straight into a monitoring pipeline:
+
+```bash
+rfhound sigint gnss --file observations.json --static --json || alert "GNSS integrity"
+```
+
 ### Precise fixes — TDOA multilateration — `sigint locate --tdoa`
 
 For a precise fix, use **time-difference-of-arrival** across ≥3 *synchronised*
