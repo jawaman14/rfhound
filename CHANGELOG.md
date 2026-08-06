@@ -17,6 +17,14 @@ flake8-clean.
   token-gated `POST /api/bookmarks/add` and `/delete` endpoints. The
   spectrum/waterfall canvases stay dark in both themes. Bookmark names are
   HTML-escaped on render.
+- **Live threat-KPI auto-refresh** — a "Live" toggle re-runs the drone/ADS-B/
+  IMSI checks every 5 s with a pulsing status indicator.
+- **Waterfall colormaps + intensity** — pick Aqua/Turbo/Viridis/Inferno/
+  Grayscale and adjust an intensity slider; both are persisted and re-colour the
+  existing waterfall without re-sweeping.
+- **Per-panel export** — download the peaks, recon, and knowledge-base tables as
+  CSV or JSON straight from the dashboard.
+- A 204 handler for `/favicon.ico` (silences the browser's default request).
 - **Web dashboard authentication** — optional bearer-token auth on all `/api/…`
   endpoints (`rfhound web --token`), auto-generated when binding to a
   non-localhost host, with a warning when exposed without one. Token accepted as

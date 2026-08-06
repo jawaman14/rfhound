@@ -133,6 +133,20 @@ def test_security_headers(base_url):
         assert r.headers.get("X-Frame-Options") == "DENY"
 
 
+def test_favicon_no_content(base_url):
+    with urllib.request.urlopen(base_url + "/favicon.ico", timeout=5) as r:
+        assert r.status == 204
+
+
+def test_dashboard_has_new_controls(base_url):
+    with urllib.request.urlopen(base_url + "/", timeout=5) as r:
+        html = r.read().decode()
+    # Live auto-refresh, waterfall colormap/intensity, and export controls.
+    assert 'id="live"' in html and "setLive" in html
+    assert 'id="wfMap"' in html and 'id="wfGain"' in html and "colormap" in html
+    assert "expPeaksCsv" in html and "exportRecon" in html and "exportBands" in html
+
+
 @pytest.fixture()
 def auth_url():
     state = web.build_app_state(Config(), force_simulate=True, token="s3cr3t")

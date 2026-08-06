@@ -96,6 +96,18 @@
       padding:5px 10px;font-size:15px;font-weight:700;cursor:pointer;line-height:1}
   .iconbtn:hover{background:var(--panel2)}
   button.mini{padding:5px 10px;font-size:12px}
+  #livePill{color:var(--ok);border-color:#1e3d2a;font-size:10px}
+  #livePill.on{animation:pulse 1.6s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:.35}50%{opacity:1}}
+  .card h2 .exp{float:right;display:flex;gap:5px;margin-top:-2px}
+  .exp button{background:var(--panel2);color:var(--dim);border:1px solid var(--border);
+      border-radius:6px;padding:2px 8px;font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:none}
+  .exp button:hover{color:var(--accent)}
+  .wf-ctl{display:flex;align-items:center;gap:10px;margin:8px 0 2px;flex-wrap:wrap}
+  .wf-ctl label{display:flex;align-items:center;gap:5px}
+  .wf-ctl select{background:var(--panel2);border:1px solid var(--border);color:var(--text);
+      border-radius:7px;padding:5px 8px;font-size:12px}
+  .wf-ctl input[type=range]{width:130px;accent-color:var(--accent)}
   table{width:100%;border-collapse:collapse;font-size:13px}
   th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--border)}
   th{color:var(--dim);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.5px}
@@ -135,6 +147,8 @@
         <div class="sub" id="clock"></div>
       </div>
       <span class="grow"></span>
+      <span class="switch" title="Auto-refresh threat KPIs"><input type="checkbox" id="live"> Live</span>
+      <span class="pill" id="livePill" style="display:none">●</span>
       <button class="iconbtn" id="themeBtn" title="Theme: auto / dark / light">🖥️</button>
       <span class="switch"><input type="checkbox" id="sim"> Simulate</span>
       <span class="pill" id="devPill">device: …</span>
@@ -173,6 +187,24 @@
       </div>
       <canvas id="spectrum-cv" height="150"></canvas>
       <canvas id="waterfall" height="130" style="margin-top:8px"></canvas>
+      <div class="wf-ctl">
+        <label>Colormap
+          <select id="wfMap">
+            <option value="aqua">Aqua</option>
+            <option value="turbo">Turbo</option>
+            <option value="viridis">Viridis</option>
+            <option value="inferno">Inferno</option>
+            <option value="gray">Grayscale</option>
+          </select>
+        </label>
+        <label>Intensity <input type="range" id="wfGain" min="0.5" max="3" step="0.1" value="1"></label>
+        <span class="muted" id="wfGainVal">1.0×</span>
+        <span class="grow" style="flex:1"></span>
+        <span class="exp" style="float:none">
+          <button id="expPeaksCsv">⇩ peaks CSV</button>
+          <button id="expPeaksJson">⇩ JSON</button>
+        </span>
+      </div>
       <div class="scroll" style="margin-top:10px">
         <table id="peaks"><thead><tr><th>Freq (MHz)</th><th>Power dB</th><th>Bandwidth</th><th>Likely signal</th><th>Decoder</th></tr></thead><tbody></tbody></table>
       </div>
@@ -181,7 +213,7 @@
     <div class="grid">
       <!-- Recon -->
       <div class="card section" id="recon">
-        <h2>Recon survey</h2>
+        <h2>Recon survey <span class="exp"><button id="expReconCsv">⇩ CSV</button><button id="expReconJson">⇩ JSON</button></span></h2>
         <div class="row"><button id="reconBtn">Run recon</button><span class="muted" id="reconInfo"></span></div>
         <div class="scroll"><table id="reconTbl"><thead><tr><th>Band</th><th>Status</th><th>Peaks</th><th>Strongest</th><th>Decoder</th></tr></thead><tbody></tbody></table></div>
       </div>
@@ -214,7 +246,7 @@
 
       <!-- Bands -->
       <div class="card section" id="bands">
-        <h2>Frequency knowledge base</h2>
+        <h2>Frequency knowledge base <span class="exp"><button id="expBandsCsv">⇩ CSV</button><button id="expBandsJson">⇩ JSON</button></span></h2>
         <div class="row">
           <label>At</label><input type="number" id="atFreq" value="433.92" step="0.01" style="width:110px"><span class="muted">MHz</span>
           <button id="atBtn" class="ghost">What's here?</button>
@@ -293,7 +325,24 @@ document.querySelectorAll('.nav a').forEach(a=>a.onclick=()=>{
 // ---- spectrum + waterfall ----
 const specCv=$('#spectrum-cv'), wfCv=$('#waterfall'); let wfRows=[];
 function fit(cv){const w=cv.clientWidth; if(cv.width!==w)cv.width=w; return cv.width;}
-function heat(v){const r=Math.max(0,Math.min(255,255*(v-0.5)*2)),g=Math.max(0,Math.min(255,255*(1-Math.abs(v-0.6)*2))),b=Math.max(0,Math.min(255,255*(0.75-v)*2));return[r|0,g|0,b|0];}
+// Waterfall colormaps. `aqua` is the original teal ramp; the rest interpolate a
+// 5-stop palette. Intensity (wfGain) scales v before mapping, so changing either
+// re-colours the existing waterfall without a fresh sweep.
+let wfMap='aqua', wfGain=1;
+const CMAPS={
+  viridis:[[68,1,84],[59,82,139],[33,145,140],[94,201,98],[253,231,37]],
+  inferno:[[0,0,4],[87,16,110],[188,55,84],[249,142,9],[252,255,164]],
+  turbo:[[48,18,59],[65,169,241],[42,231,140],[249,206,50],[221,50,20]],
+};
+function lerpPal(pal,v){const n=pal.length-1,x=Math.max(0,Math.min(1,v))*n,i=Math.min(n-1,Math.floor(x)),t=x-i,
+  a=pal[i],b=pal[i+1];return[a[0]+(b[0]-a[0])*t|0,a[1]+(b[1]-a[1])*t|0,a[2]+(b[2]-a[2])*t|0];}
+function aqua(v){const r=Math.max(0,Math.min(255,255*(v-0.5)*2)),g=Math.max(0,Math.min(255,255*(1-Math.abs(v-0.6)*2))),b=Math.max(0,Math.min(255,255*(0.75-v)*2));return[r|0,g|0,b|0];}
+function colormap(v){
+  v=Math.max(0,Math.min(1,v*wfGain));
+  if(wfMap==='gray'){const c=255*v|0;return[c,c,c];}
+  if(wfMap==='aqua') return aqua(v);
+  return lerpPal(CMAPS[wfMap]||CMAPS.turbo, v);
+}
 function drawSpectrum(d){
   const w=fit(specCv),h=specCv.height,ctx=specCv.getContext('2d');ctx.clearRect(0,0,w,h);
   const s=d.spectrum,min=d.min_db-3,max=d.max_db+3,rng=Math.max(1,max-min);
@@ -312,7 +361,7 @@ function drawSpectrum(d){
 function drawWaterfall(){
   const w=fit(wfCv),h=wfCv.height,ctx=wfCv.getContext('2d'),img=ctx.createImageData(w,h);
   for(let y=0;y<wfRows.length;y++){const row=wfRows[y];
-    for(let x=0;x<w;x++){const v=Math.max(0,Math.min(1,row[Math.floor(x/w*row.length)]||0)),c=heat(v),o=(y*w+x)*4;
+    for(let x=0;x<w;x++){const v=Math.max(0,Math.min(1,row[Math.floor(x/w*row.length)]||0)),c=colormap(v),o=(y*w+x)*4;
       img.data[o]=c[0];img.data[o+1]=c[1];img.data[o+2]=c[2];img.data[o+3]=255;}}
   ctx.putImageData(img,0,0);
 }
@@ -350,7 +399,7 @@ function updateSMeter(d){
 }
 async function doSweep(){
   try{const d=await api(`/api/sweep?start=${$('#fStart').value}&stop=${$('#fStop').value}&simulate=${sim()}`);
-    drawSpectrum(d); updateSMeter(d);
+    lastSweep=d; drawSpectrum(d); updateSMeter(d);
     $('#sweepInfo').textContent=`floor ${d.noise_floor_db} dB · ${d.peaks.length} peaks`+(d.simulated?' · SIMULATED':'');
     const tb=$('#peaks tbody');tb.innerHTML='';
     d.peaks.forEach(p=>tb.insertAdjacentHTML('beforeend',
@@ -364,6 +413,7 @@ async function doSweep(){
 async function doRecon(){
   $('#reconInfo').textContent='running…';
   const d=await api(`/api/recon?simulate=${sim()}`);
+  lastRecon=d;
   $('#reconInfo').textContent=`${d.active}/${d.total} active`+(d.simulated?' · SIMULATED':'');
   setKpi('#kpiBands', d.active, d.active? 'warn':'ok');
   const tb=$('#reconTbl tbody');tb.innerHTML='';
@@ -450,7 +500,46 @@ function bookmarkCenter(){
   const c=((parseFloat($('#fStart').value)+parseFloat($('#fStop').value))/2);
   if(c>0){ $('#bmFreq').value=c.toFixed(3); if(!$('#bmName').value) $('#bmName').value='mark '+c.toFixed(3); }
 }
+// ---- export (CSV / JSON) ----
+let lastSweep=null, lastRecon=null;
+function download(name,text,mime){const b=new Blob([text],{type:mime}),u=URL.createObjectURL(b),
+  a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);}
+function csvCell(s){s=s==null?'':String(s);return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}
+function toCSV(headers,rows){return [headers.join(','),...rows.map(r=>r.map(csvCell).join(','))].join('\n');}
+function ts(){return new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);}
+function exportPeaks(fmt){ if(!lastSweep){bmMsg('Run a sweep first.',true);return;}
+  if(fmt==='json') return download(`rfhound-peaks-${ts()}.json`,JSON.stringify(lastSweep,null,2),'application/json');
+  const rows=(lastSweep.peaks||[]).map(p=>[p.freq_mhz,p.power_db,p.bandwidth_khz||'',p.guess||p.band||'',p.confidence||'',p.decoder||'']);
+  download(`rfhound-peaks-${ts()}.csv`,toCSV(['freq_mhz','power_db','bandwidth_khz','likely','confidence','decoder'],rows),'text/csv'); }
+function exportRecon(fmt){ if(!lastRecon){bmMsg('Run recon first.',true);return;}
+  if(fmt==='json') return download(`rfhound-recon-${ts()}.json`,JSON.stringify(lastRecon,null,2),'application/json');
+  const rows=(lastRecon.findings||[]).map(f=>[f.band,f.category,f.active?'active':'quiet',f.peaks,f.strongest_mhz||'',f.strongest_db||'',f.decoder||'']);
+  download(`rfhound-recon-${ts()}.csv`,toCSV(['band','category','status','peaks','strongest_mhz','strongest_db','decoder'],rows),'text/csv'); }
+function exportBands(fmt){ if(!allBands.length){return;}
+  if(fmt==='json') return download(`rfhound-bands-${ts()}.json`,JSON.stringify(allBands,null,2),'application/json');
+  const rows=allBands.map(b=>[b.low_mhz,b.high_mhz,b.name,b.category,b.decoder||'',(b.tags||[]).join(' ')]);
+  download(`rfhound-bands-${ts()}.csv`,toCSV(['low_mhz','high_mhz','name','category','decoder','tags'],rows),'text/csv'); }
+
+// ---- waterfall colormap / intensity ----
+function initWaterfallCtl(){
+  wfMap=localStorage.getItem('rfh_wfmap')||'aqua';
+  wfGain=parseFloat(localStorage.getItem('rfh_wfgain'))||1;
+  $('#wfMap').value=wfMap; $('#wfGain').value=wfGain; $('#wfGainVal').textContent=wfGain.toFixed(1)+'×';
+  $('#wfMap').onchange=e=>{wfMap=e.target.value;localStorage.setItem('rfh_wfmap',wfMap);drawWaterfall();};
+  $('#wfGain').oninput=e=>{wfGain=parseFloat(e.target.value);$('#wfGainVal').textContent=wfGain.toFixed(1)+'×';
+    localStorage.setItem('rfh_wfgain',wfGain);drawWaterfall();};
+}
+
+// ---- live threat-KPI auto-refresh ----
+let liveTimer=null;
 async function refreshKpis(){ try{await doDrone();await doAdsb();await doImsi();}catch(e){} }
+function setLive(on){
+  const pill=$('#livePill');
+  if(on){ pill.style.display=''; pill.classList.add('on'); refreshKpis();
+    liveTimer=setInterval(refreshKpis,5000); }
+  else{ pill.style.display='none'; pill.classList.remove('on');
+    if(liveTimer)clearInterval(liveTimer); liveTimer=null; }
+}
 
 $('#sweepBtn').onclick=doSweep;$('#reconBtn').onclick=doRecon;
 $('#droneBtn').onclick=doDrone;$('#adsbBtn').onclick=doAdsb;$('#imsiBtn').onclick=doImsi;$('#hopBtn').onclick=doHop;
@@ -469,9 +558,13 @@ $('#bmAddBtn').onclick=addBookmark;
 $('#bmFromCenter').onclick=bookmarkCenter;
 $('#bmFreq').addEventListener('keydown',e=>{if(e.key==='Enter')addBookmark();});
 $('#bmNote').addEventListener('keydown',e=>{if(e.key==='Enter')addBookmark();});
+$('#expPeaksCsv').onclick=()=>exportPeaks('csv');$('#expPeaksJson').onclick=()=>exportPeaks('json');
+$('#expReconCsv').onclick=()=>exportRecon('csv');$('#expReconJson').onclick=()=>exportRecon('json');
+$('#expBandsCsv').onclick=()=>exportBands('csv');$('#expBandsJson').onclick=()=>exportBands('json');
+$('#live').onchange=e=>setLive(e.target.checked);
 let autoTimer=null;$('#autoSweep').onchange=e=>{if(e.target.checked)autoTimer=setInterval(doSweep,1500);else clearInterval(autoTimer);};
 window.addEventListener('resize',drawWaterfall);
-initTheme();
+initTheme();initWaterfallCtl();
 loadStatus().then(loadBands).then(loadBookmarks).then(doSweep).then(doRecon).then(refreshKpis).catch(e=>console.error(e));
 </script>
 </body>

@@ -153,7 +153,10 @@ Every panel is backed by a JSON endpoint you can consume directly:
 The dashboard has a **theme toggle** (auto / dark / light, persisted per browser),
 an **S-meter** with an S-unit scale + peak-hold, and inline **bookmark editing**
 (add/delete, or ★ the current sweep centre). The spectrum/waterfall canvases stay
-dark in both themes.
+dark in both themes. A **Live** toggle auto-refreshes the threat KPIs; the
+**waterfall** has selectable colormaps (Aqua/Turbo/Viridis/Inferno/Grayscale) and
+an intensity slider; and the peaks, recon, and knowledge-base tables each
+**export to CSV or JSON**.
 
 **Authentication.** By default the dashboard binds to `127.0.0.1` with no token
 (fine for a local session). To expose it on a network, gate the API with a token:

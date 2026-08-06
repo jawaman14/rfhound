@@ -314,6 +314,11 @@ def _make_handler(state: AppState):
             try:
                 if path in ("/", "/index.html"):
                     return self._send_html()
+                if path == "/favicon.ico":
+                    self.send_response(204)
+                    self._security_headers()
+                    self.end_headers()
+                    return
                 if path == "/api/version":
                     return self._send_json({"version": __version__})
                 if path == "/api/status":
