@@ -50,6 +50,8 @@ rfhound --simulate web --open   # launch the dashboard with no hardware
 | `sweep <start> <stop> [--bin --snr --sweeps --top]` | Spectrogram + peak detection |
 | `sweep … --watch [--interval --count]` | Live, continuously-updating spectrum |
 | `recon [--category] [--report file.md/html]` | Auto-survey high-value bands |
+| `wifi channels [--band 2.4\|5\|both]` | List the Wi-Fi channel plan (DFS flagged) |
+| `wifi survey [--band 2.4\|5\|both] [--snr]` | Wi-Fi channel occupancy + clearest-channel pick (RX-only) |
 | `capture <MHz> <sec> [--name --rate --note]` | Record IQ + SigMF metadata |
 | `decode list` / `decode run <id> [--freq --seconds --dry-run]` | Protocol decoders |
 | `gnuradio status\|list\|gen <preset> --freq MHz` | Generate GNU Radio RX flowgraphs |

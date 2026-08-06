@@ -43,6 +43,29 @@ def test_sweep_simulate(capsys):
     assert "Spectrum" in out
 
 
+def test_wifi_channels(capsys):
+    rc = run(["wifi", "channels", "--band", "2.4"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "channel plan" in out.lower()
+
+
+def test_wifi_survey_simulate(capsys):
+    rc = run(["wifi", "survey", "--band", "2.4", "--simulate"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "Wi-Fi" in out
+    assert "Suggested channel" in out
+
+
+def test_wifi_survey_both_default_simulate(capsys):
+    rc = run(["--simulate", "wifi", "survey"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    # both bands surveyed
+    assert "2.4 GHz" in out and "5 GHz" in out
+
+
 def test_recon_simulate_with_report(tmp_path, capsys):
     report = tmp_path / "rep.md"
     rc = run(["recon", "--simulate", "--report", str(report)])

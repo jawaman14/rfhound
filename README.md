@@ -1,7 +1,7 @@
 # RFHound 🐕‍🦺📡
 
 **A friendly, powerful HackRF reconnaissance & RF situational-awareness toolkit.**
-_Version 1.1 · receive-first · 207 tests · MIT._
+_Version 1.2 · receive-first · 230 tests · MIT._
 
 RFHound turns a wall of raw spectrum into *"oh, that's a tire-pressure sensor"*.
 It is an **orchestration layer** — it does not re-implement DSP. Instead it
@@ -47,6 +47,7 @@ the law. That's RFHound.
 | Save frequencies | `rfhound bookmark add myfob 433.92` |
 | See what's transmitting around you | `rfhound recon` — auto-sweeps high-value bands and reports hits |
 | Look at a specific slice of spectrum | `rfhound sweep 433 435` — terminal spectrogram + peak detection |
+| See how crowded Wi-Fi is (2.4/5 GHz) | `rfhound wifi survey` — per-channel occupancy + clearest-channel pick |
 | Know what a frequency *is* | `rfhound bands --search tpms` — curated knowledge base |
 | Decode a protocol | `rfhound decode run rtl433` — drives rtl_433 / dump1090 / … |
 | Save a signal for deep analysis | `rfhound capture 433.92 10` — IQ + SigMF metadata for URH |
@@ -166,6 +167,7 @@ ACARS/APRS, NOAA weather-satellite imagery, GPS L1 (receive-only), and the busy
 - [`docs/LEGAL.md`](docs/LEGAL.md) — **read this first**; law, ethics, and what's excluded
 - [`docs/USAGE.md`](docs/USAGE.md) — install the decoders, recipes, workflows
 - [`docs/DECODERS.md`](docs/DECODERS.md) — the full decoder list + the signal auto-classifier
+- [`docs/WIFI.md`](docs/WIFI.md) — Wi-Fi 2.4/5 GHz channel survey (receive-only occupancy view)
 - [`docs/KNOWLEDGE_BASE.md`](docs/KNOWLEDGE_BASE.md) — RF reference: ITU bands, modulations, signal-ID workflow
 - [`docs/REFERENCES.md`](docs/REFERENCES.md) — curated handbooks, guides, and tool links
 - [`docs/DEFENSE.md`](docs/DEFENSE.md) — detection & hardening: jamming, replay, spoofing, TSCM, C-UAS, hop-detect, response playbooks

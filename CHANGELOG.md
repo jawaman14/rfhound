@@ -2,6 +2,21 @@
 
 All notable changes to RFHound. Versioning is [SemVer](https://semver.org/).
 
+## [1.2.0] — 2026-08-06
+
+### Added in 1.2.0
+- **Wi-Fi 2.4 & 5 GHz channel survey (`wifi`)** — a receive-only spectrum view
+  of the Wi-Fi bands. `wifi channels` lists the 2.4 GHz (1-14) and 5 GHz U-NII
+  channel plan (DFS channels flagged); `wifi survey [--band 2.4|5|both]` sweeps
+  each band, scores per-channel occupancy/SNR, and recommends the clearest
+  channel to move to (restricted to the non-overlapping 1/6/11 set on 2.4 GHz,
+  and to non-DFS channels on 5 GHz). Reuses the existing `hackrf_sweep`
+  pipeline; `--simulate` works with no hardware. Added to the guided menu too.
+  It is a PHY-level occupancy view (energy per channel), **not** an 802.11
+  frame decoder — and it stays true to RFHound's guarantees: **no Wi-Fi
+  transmit, deauth, or jamming**. For interference/jamming detection on these
+  bands, `wifi survey` points you at `defense monitor` / `sigint jamming`.
+
 ## [1.1.0] — 2026-08-04
 
 Everything since 1.0 — SIGINT/EW-support, automation, an AI console, recordings,
