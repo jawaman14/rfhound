@@ -91,6 +91,18 @@ def test_email_not_sent_without_config():
     assert auto.send_email(Config(), "x@y", "s", "b") is False
 
 
+def test_ndjson_scheduler_stream(tmp_path, monkeypatch, capsys):
+    import json as _json
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    cfg = Config()
+    auto.add_automation(cfg, "jam", "gnss", interval_s=0, params={"scenario": "jamming"})
+    auto.run_scheduler(cfg, simulate=True, tick_s=0, max_ticks=1, ndjson=True)
+    out = [ln for ln in capsys.readouterr().out.splitlines() if ln.strip()]
+    assert out
+    ev = _json.loads(out[0])  # every line is valid JSON
+    assert ev["name"] == "jam" and "summary" in ev
+
+
 def test_alert_cooldown_suppresses_repeat(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     cfg = Config()

@@ -58,6 +58,9 @@ condition (e.g. a persistent jammer) alerts once instead of every interval.
 - Definitions persist in `~/.config/rfhound/config.json` (`automations`).
 - Every run appends a JSON line to `~/.config/rfhound/automations.log`.
 - Webhooks receive the event JSON (`name`, `task`, `alert`, `summary`, `data`).
+- Email alerts go through the configured SMTP server (`rfhound config smtp …`).
+- `rfhound automate run --ndjson` streams each event as one JSON line to stdout —
+  a SIEM feed you can pipe into a collector: `rfhound automate run --ndjson | vector`.
 
 Automations never transmit. Pair a `monitor`/`drone`/`imsi` automation with a
 webhook to wire RF alerts straight into a SIEM or chat channel.

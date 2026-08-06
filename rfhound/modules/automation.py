@@ -270,26 +270,37 @@ def run_due(cfg: Config, *, simulate: bool, state: dict, now: float | None = Non
 
 
 def run_scheduler(cfg: Config, *, simulate: bool, tick_s: float = 2.0,
-                  max_ticks: int | None = None) -> None:
-    """Foreground scheduler loop (Ctrl-C to stop)."""
+                  max_ticks: int | None = None, ndjson: bool = False) -> None:
+    """Foreground scheduler loop (Ctrl-C to stop).
+
+    With ``ndjson=True`` each fired event is written to stdout as one JSON line
+    (a SIEM feed: ``rfhound automate run --ndjson | your-collector``); the human
+    console chrome is suppressed so the stream stays machine-parseable.
+    """
     if not cfg.automations:
-        console.warn("No automations defined. Add one first (automation menu / "
-                     "'rfhound automate add').")
+        if not ndjson:
+            console.warn("No automations defined. Add one first (automation menu / "
+                         "'rfhound automate add').")
         return
-    console.success(f"Running {sum(1 for a in cfg.automations if _norm(a)['enabled'])} "
-                    f"automation(s). Ctrl-C to stop. Log: {automations_log()}")
+    if not ndjson:
+        console.success(f"Running {sum(1 for a in cfg.automations if _norm(a)['enabled'])} "
+                        f"automation(s). Ctrl-C to stop. Log: {automations_log()}")
     state: dict = {}
     ticks = 0
     try:
         while max_ticks is None or ticks < max_ticks:
             for ev in run_due(cfg, simulate=simulate, state=state, force=(ticks == 0)):
-                tag = "ALERT" if ev["alert"] else "ok"
-                (console.error if ev["alert"] else console.info)(
-                    f"{ev['name']} · {tag}: {ev['summary']}")
+                if ndjson:
+                    console.raw(json.dumps(ev))
+                else:
+                    tag = "ALERT" if ev["alert"] else "ok"
+                    (console.error if ev["alert"] else console.info)(
+                        f"{ev['name']} · {tag}: {ev['summary']}")
             ticks += 1
             time.sleep(tick_s)
     except KeyboardInterrupt:
-        console.warn("Scheduler stopped.")
+        if not ndjson:
+            console.warn("Scheduler stopped.")
 
 
 # --------------------------------------------------------------------------- #

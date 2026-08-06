@@ -1128,7 +1128,7 @@ def cmd_automate(args: argparse.Namespace, cfg: Config) -> int:
                 f"{auto_mod._norm(a)['name']} · {'ALERT' if alerting else 'ok'}: {res.summary}")
         return 0
     if sub == "run":
-        auto_mod.run_scheduler(cfg, simulate=sim)
+        auto_mod.run_scheduler(cfg, simulate=sim, ndjson=getattr(args, "ndjson", False))
         return 0
     console.error("Unknown automate subcommand.")
     return 1
@@ -1802,7 +1802,10 @@ def build_parser() -> argparse.ArgumentParser:
     auon.add_argument("--simulate", action="store_true")
     aur = ausub.add_parser("run", help="Run the scheduler loop (Ctrl-C to stop)")
     aur.add_argument("--simulate", action="store_true")
-    pau.set_defaults(func=cmd_automate, automate_cmd=None, simulate=False, name=None)
+    aur.add_argument("--ndjson", action="store_true",
+                     help="Stream each event as newline-delimited JSON (SIEM feed)")
+    pau.set_defaults(func=cmd_automate, automate_cmd=None, simulate=False, name=None,
+                     ndjson=False)
 
     ptr = sub.add_parser("track", help="Track decoded IDs (aircraft/vessel/sensor/pager)")
     trsub = ptr.add_subparsers(dest="track_cmd")

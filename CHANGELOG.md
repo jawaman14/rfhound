@@ -24,6 +24,8 @@ All notable changes to RFHound. Versioning is [SemVer](https://semver.org/).
 - **Deployment packaging** — a `Dockerfile` (bundles hackrf + rtl-433) and
   `docker-compose.yml` (dashboard + hub), plus hardened **systemd units** in
   `deploy/` for an unattended, receive-only, token-gated sensor node.
+- **NDJSON alert stream** — `rfhound automate run --ndjson` emits each event as
+  one JSON line to stdout, a SIEM feed to pipe into a collector.
 
 ### Removed
 - Dead code: unused `console.live_lines`/`make_text` helpers (and their now-orphan
