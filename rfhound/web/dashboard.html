@@ -11,8 +11,6 @@
     --ok:#3fd07a; --warn:#e3b341; --bad:#ff5c6c; --grid:#16202f;
     --shadow:0 6px 24px rgba(0,0,0,.35);
   }
-  /* Light palette — applied automatically when the OS prefers light and no
-     manual theme is set, and always when data-theme="light" is forced. */
   :root[data-theme="light"]{
     --bg:#eef2f7;--bg2:#e7edf5;--panel:#fff;--panel2:#f2f6fb;--border:#d6deea;
     --text:#141b26;--dim:#5a6b82;--grid:#e6ecf5;--shadow:0 6px 20px rgba(20,40,80,.08)}
@@ -27,29 +25,45 @@
        background:radial-gradient(1200px 600px at 80% -10%,#12203300,var(--bg)) fixed,var(--bg);
        color:var(--text);min-height:100vh}
   a{color:var(--accent2);text-decoration:none}
-  /* Layout */
   .app{display:grid;grid-template-columns:210px 1fr;min-height:100vh}
   .side{background:linear-gradient(180deg,var(--bg2),var(--bg));border-right:1px solid var(--border);
         padding:18px 14px;display:flex;flex-direction:column;gap:6px;position:sticky;top:0;height:100vh}
-  .brand{display:flex;align-items:center;gap:9px;font-weight:800;font-size:17px;margin-bottom:14px;letter-spacing:.4px}
+  .brand{display:flex;align-items:center;gap:9px;font-weight:800;font-size:17px;margin-bottom:6px;letter-spacing:.4px}
   .brand .dot{width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent)}
-  .nav{display:flex;flex-direction:column;gap:2px;flex:1}
+  .brand small{display:block;font-size:10px;color:var(--dim);font-weight:600;letter-spacing:.3px}
+  .nav{display:flex;flex-direction:column;gap:2px;flex:1;margin-top:10px}
   .nav a{padding:9px 11px;border-radius:9px;color:var(--dim);font-size:14px;font-weight:600;display:flex;gap:9px;align-items:center}
   .nav a:hover{background:var(--panel2);color:var(--text)}
   .nav a.active{background:var(--panel2);color:var(--accent)}
   .side .foot{font-size:11px;color:var(--dim);border-top:1px solid var(--border);padding-top:10px}
-  .main{padding:18px 22px 40px;max-width:1500px}
-  /* Topbar */
-  .top{display:flex;align-items:center;gap:14px;margin-bottom:18px}
-  .top h1{font-size:19px;margin:0;font-weight:800}
-  .top .sub{color:var(--dim);font-size:12px}
+  .main{padding:16px 22px 40px;max-width:1600px}
+  /* Receiver bar */
+  .rxbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:var(--panel);
+         border:1px solid var(--border);border-radius:14px;padding:12px 16px;margin-bottom:14px;box-shadow:var(--shadow)}
+  .freqout{font-variant-numeric:tabular-nums;font-weight:800;font-size:30px;letter-spacing:.5px;line-height:1}
+  .freqout small{font-size:13px;color:var(--dim);font-weight:700;margin-left:4px}
+  .rxset{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--dim);font-weight:600}
+  .rxset input{width:78px}
+  .steps{display:flex;gap:4px}
   .grow{flex:1}
+  .presets{display:flex;gap:5px;flex-wrap:wrap}
+  .chip{font-size:11px;font-weight:700;padding:4px 9px;border-radius:999px;background:var(--panel2);
+        border:1px solid var(--border);color:var(--dim);cursor:pointer}
+  .chip:hover{color:var(--accent);border-color:var(--accent)}
+  .rxstatus{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  /* Controls */
   .pill{font-size:12px;padding:5px 11px;border-radius:999px;background:var(--panel);
         border:1px solid var(--border);color:var(--dim);font-weight:600}
   .pill.ok{color:var(--ok);border-color:#1e3d2a} .pill.bad{color:var(--bad);border-color:#4a2028}
-  .switch{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--dim);font-weight:600}
-  /* Threat strip */
-  .strip{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:18px}
+  .switch{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--dim);font-weight:600}
+  #livePill{color:var(--ok);border-color:#1e3d2a;font-size:10px;display:none}
+  #livePill.on{animation:pulse 1.6s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:.35}50%{opacity:1}}
+  .iconbtn{background:var(--panel);border:1px solid var(--border);color:var(--text);border-radius:8px;
+      padding:5px 10px;font-size:15px;font-weight:700;cursor:pointer;line-height:1}
+  .iconbtn:hover{background:var(--panel2)}
+  /* KPI strip */
+  .strip{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:14px}
   .kpi{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:13px 14px;box-shadow:var(--shadow)}
   .kpi .k{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.8px;font-weight:700}
   .kpi .v{font-size:24px;font-weight:800;margin-top:3px}
@@ -63,14 +77,18 @@
   label{font-size:12px;color:var(--dim);font-weight:600}
   input[type=number],input[type=text]{background:var(--panel2);border:1px solid var(--border);
       color:var(--text);border-radius:8px;padding:7px 9px;width:88px;font-size:13px}
-  input[type=text]{width:200px}
+  input[type=text]{width:160px}
   button{background:linear-gradient(180deg,var(--accent2),#4790f0);color:#031225;border:0;border-radius:8px;
       padding:8px 13px;font-weight:700;cursor:pointer;font-size:13px}
   button:hover{filter:brightness(1.08)} button:active{transform:translateY(1px)}
   button.ghost{background:var(--panel2);color:var(--text);border:1px solid var(--border)}
-  /* Scope stays dark in both themes — conventional for spectrum/waterfall and
-     keeps the trace legible regardless of the surrounding UI theme. */
+  button.mini{padding:5px 10px;font-size:12px}
+  .canvas-wrap{position:relative}
   canvas{width:100%;background:#04070d;border-radius:10px;display:block;border:1px solid var(--border)}
+  #cursor{position:absolute;top:0;bottom:0;width:1px;background:rgba(56,224,200,.6);pointer-events:none;display:none}
+  #cursorTip{position:absolute;top:4px;background:rgba(4,7,13,.9);border:1px solid var(--border);color:#e8eef6;
+      font-size:11px;font-variant-numeric:tabular-nums;padding:2px 6px;border-radius:6px;pointer-events:none;
+      display:none;white-space:nowrap;transform:translateX(-50%)}
   .smeter{display:flex;align-items:center;gap:10px;margin:4px 0 2px}
   .smeter-label{font-size:10px;font-weight:800;letter-spacing:1px;color:var(--dim)}
   .smeter-track{flex:1;height:14px;border-radius:7px;background:var(--panel2);border:1px solid var(--border);
@@ -81,62 +99,24 @@
   .smeter-val{font-size:12px;font-weight:700;min-width:72px;text-align:right;font-variant-numeric:tabular-nums}
   .smeter-scale{display:flex;justify-content:space-between;margin:0 76px 10px 62px;
       font-size:9px;color:var(--dim);font-weight:700;letter-spacing:.3px}
-  .smeter-scale span{position:relative}
-  .bm-row{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:7px 4px;
-      border-bottom:1px solid var(--border)}
-  .bm-row:hover{background:var(--panel2)}
-  .bm-row .bm-tune{flex:1;cursor:pointer;display:flex;justify-content:space-between;gap:10px;align-items:center}
-  .bm-row .f{color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums}
-  .bm-del{background:transparent;border:0;color:var(--dim);font-size:15px;line-height:1;cursor:pointer;
-      padding:2px 6px;border-radius:6px}
-  .bm-del:hover{background:var(--bad);color:#fff}
-  .bm-add{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;align-items:center}
-  .bm-add input[type=text]{width:120px} .bm-add input[type=number]{width:92px}
-  .iconbtn{background:var(--panel);border:1px solid var(--border);color:var(--text);border-radius:8px;
-      padding:5px 10px;font-size:15px;font-weight:700;cursor:pointer;line-height:1}
-  .iconbtn:hover{background:var(--panel2)}
-  button.mini{padding:5px 10px;font-size:12px}
-  #livePill{color:var(--ok);border-color:#1e3d2a;font-size:10px}
-  #livePill.on{animation:pulse 1.6s ease-in-out infinite}
-  @keyframes pulse{0%,100%{opacity:.35}50%{opacity:1}}
-  .card h2 .exp{float:right;display:flex;gap:5px;margin-top:-2px}
-  .exp button{background:var(--panel2);color:var(--dim);border:1px solid var(--border);
-      border-radius:6px;padding:2px 8px;font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:none}
-  .exp button:hover{color:var(--accent)}
   .wf-ctl{display:flex;align-items:center;gap:10px;margin:8px 0 2px;flex-wrap:wrap}
   .wf-ctl label{display:flex;align-items:center;gap:5px}
   .wf-ctl select{background:var(--panel2);border:1px solid var(--border);color:var(--text);
       border-radius:7px;padding:5px 8px;font-size:12px}
   .wf-ctl input[type=range]{width:130px;accent-color:var(--accent)}
-  /* Peak detail drawer */
-  .drawer-scrim{position:fixed;inset:0;background:rgba(0,0,0,.45);opacity:0;pointer-events:none;
-      transition:opacity .2s ease;z-index:40}
-  .drawer-scrim.open{opacity:1;pointer-events:auto}
-  .drawer{position:fixed;top:0;right:0;height:100vh;width:min(420px,92vw);background:var(--panel);
-      border-left:1px solid var(--border);box-shadow:-10px 0 40px rgba(0,0,0,.4);z-index:41;
-      transform:translateX(100%);transition:transform .25s ease;overflow-y:auto;padding:18px 18px 40px}
-  .drawer.open{transform:translateX(0)}
-  .drawer .dhead{display:flex;align-items:flex-start;gap:10px;margin-bottom:6px}
-  .drawer .dhead h3{margin:0;font-size:22px;font-weight:800;font-variant-numeric:tabular-nums}
-  .drawer .dhead .close{margin-left:auto;background:transparent;border:0;color:var(--dim);font-size:22px;
-      cursor:pointer;line-height:1;padding:2px 6px}
-  .drawer .dhead .close:hover{color:var(--text)}
-  .drawer .dsub{color:var(--dim);font-size:12px;margin-bottom:14px}
-  .drawer h4{font-size:11px;color:var(--accent);text-transform:uppercase;letter-spacing:1px;
-      margin:16px 0 7px;border-top:1px solid var(--border);padding-top:12px}
-  .drawer h4:first-of-type{border-top:0;padding-top:0}
-  .drawer .kv{font-size:13px;margin:4px 0}
-  .drawer .kv b{color:var(--text)}
-  .drawer code{background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:2px 6px;
-      font-size:12px;display:inline-block;word-break:break-all}
-  .drawer .cmd{display:block;margin-top:6px;padding:8px 10px;line-height:1.5}
-  .drawer .match{display:flex;justify-content:space-between;gap:8px;font-size:13px;padding:4px 0;
-      border-bottom:1px dashed var(--border)}
-  .drawer .bar{height:5px;border-radius:3px;background:var(--accent);margin-top:2px}
-  .drawer .dact{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
-  .copybtn{cursor:pointer;border:1px solid var(--border);background:var(--panel2);color:var(--dim);
-      border-radius:6px;padding:1px 7px;font-size:11px;margin-left:6px}
-  .copybtn:hover{color:var(--accent)}
+  .exp{float:right;display:flex;gap:5px;margin-top:-2px}
+  .exp button{background:var(--panel2);color:var(--dim);border:1px solid var(--border);
+      border-radius:6px;padding:2px 8px;font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:none}
+  .exp button:hover{color:var(--accent)}
+  .bm-row{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:7px 4px;
+      border-bottom:1px solid var(--border)}
+  .bm-row:hover{background:var(--panel2)}
+  .bm-row .bm-tune{flex:1;cursor:pointer;display:flex;justify-content:space-between;gap:10px;align-items:center}
+  .bm-row .f{color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums}
+  .bm-del{background:transparent;border:0;color:var(--dim);font-size:15px;line-height:1;cursor:pointer;padding:2px 6px;border-radius:6px}
+  .bm-del:hover{background:var(--bad);color:#fff}
+  .bm-add{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;align-items:center}
+  .bm-add input[type=text]{width:120px} .bm-add input[type=number]{width:92px}
   table{width:100%;border-collapse:collapse;font-size:13px}
   th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--border)}
   th{color:var(--dim);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.5px}
@@ -148,9 +128,32 @@
   .scroll{max-height:260px;overflow:auto}
   .section{scroll-margin-top:16px}
   footer{color:var(--dim);font-size:11px;margin-top:22px;border-top:1px solid var(--border);padding-top:12px}
+  /* Peak detail drawer */
+  .drawer-scrim{position:fixed;inset:0;background:rgba(0,0,0,.45);opacity:0;pointer-events:none;transition:opacity .2s ease;z-index:40}
+  .drawer-scrim.open{opacity:1;pointer-events:auto}
+  .drawer{position:fixed;top:0;right:0;height:100vh;width:min(420px,92vw);background:var(--panel);
+      border-left:1px solid var(--border);box-shadow:-10px 0 40px rgba(0,0,0,.4);z-index:41;
+      transform:translateX(100%);transition:transform .25s ease;overflow-y:auto;padding:18px 18px 40px}
+  .drawer.open{transform:translateX(0)}
+  .drawer .dhead{display:flex;align-items:flex-start;gap:10px;margin-bottom:6px}
+  .drawer .dhead h3{margin:0;font-size:22px;font-weight:800;font-variant-numeric:tabular-nums}
+  .drawer .dhead .close{margin-left:auto;background:transparent;border:0;color:var(--dim);font-size:22px;cursor:pointer;line-height:1;padding:2px 6px}
+  .drawer .dhead .close:hover{color:var(--text)}
+  .drawer .dsub{color:var(--dim);font-size:12px;margin-bottom:14px}
+  .drawer h4{font-size:11px;color:var(--accent);text-transform:uppercase;letter-spacing:1px;margin:16px 0 7px;border-top:1px solid var(--border);padding-top:12px}
+  .drawer h4:first-of-type{border-top:0;padding-top:0}
+  .drawer .kv{font-size:13px;margin:4px 0}
+  .drawer .kv b{color:var(--text)}
+  .drawer code{background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:2px 6px;font-size:12px;display:inline-block;word-break:break-all}
+  .drawer .cmd{display:block;margin-top:6px;padding:8px 10px;line-height:1.5}
+  .drawer .match{display:flex;justify-content:space-between;gap:8px;font-size:13px;padding:4px 0;border-bottom:1px dashed var(--border)}
+  .drawer .bar{height:5px;border-radius:3px;background:var(--accent);margin-top:2px}
+  .drawer .dact{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+  .copybtn{cursor:pointer;border:1px solid var(--border);background:var(--panel2);color:var(--dim);border-radius:6px;padding:1px 7px;font-size:11px;margin-left:6px}
+  .copybtn:hover{color:var(--accent)}
+  @media (max-width:900px){.app{grid-template-columns:1fr}.side{position:static;height:auto;flex-direction:row;flex-wrap:wrap}.nav{flex-direction:row;flex-wrap:wrap}.grid{grid-template-columns:1fr}.strip{grid-template-columns:repeat(2,1fr)}}
 </style>
 <script>
-  // Apply the saved theme before first paint (avoids a light/dark flash).
   try{var _t=localStorage.getItem('rfh_theme');
     if(_t==='dark'||_t==='light')document.documentElement.setAttribute('data-theme',_t);}catch(e){}
 </script>
@@ -158,11 +161,15 @@
 <body>
 <div class="app">
   <aside class="side">
-    <div class="brand"><span class="dot"></span> RFHound</div>
+    <div class="brand"><span class="dot"></span> <span>RFHound<small>RF situational awareness</small></span></div>
     <nav class="nav">
       <a href="#spectrum" class="active">📈 Spectrum</a>
       <a href="#recon">🛰️ Recon</a>
       <a href="#threats">🛡️ Threats</a>
+      <a href="#capture">⏺️ Capture</a>
+      <a href="#recordings">💾 Recordings</a>
+      <a href="#emitters">📇 Emitters (EOB)</a>
+      <a href="#sightings">🔎 Sightings</a>
       <a href="#bands">📚 Knowledge base</a>
       <a href="#system">⚙️ System</a>
     </nav>
@@ -170,18 +177,33 @@
   </aside>
 
   <main class="main">
-    <div class="top">
+    <!-- Receiver bar -->
+    <div class="rxbar">
       <div>
-        <h1>RF Situational Awareness</h1>
-        <div class="sub" id="clock"></div>
+        <div class="freqout"><span id="rxCenter">—</span><small>MHz</small></div>
+        <div class="muted" id="rxSpan">span — MHz</div>
+      </div>
+      <div class="rxset">
+        <label>Start</label><input type="number" id="fStart" value="430" step="1">
+        <label>Stop</label><input type="number" id="fStop" value="440" step="1">
+        <div class="steps">
+          <button class="iconbtn" id="stepDown" title="Shift down one span">◀</button>
+          <button class="iconbtn" id="zoomIn" title="Zoom in (halve span)">＋</button>
+          <button class="iconbtn" id="zoomOut" title="Zoom out (double span)">－</button>
+          <button class="iconbtn" id="stepUp" title="Shift up one span">▶</button>
+        </div>
+        <button id="sweepBtn">Sweep</button>
       </div>
       <span class="grow"></span>
-      <span class="switch" title="Auto-refresh threat KPIs"><input type="checkbox" id="live"> Live</span>
-      <span class="pill" id="livePill" style="display:none">●</span>
-      <button class="iconbtn" id="themeBtn" title="Theme: auto / dark / light">🖥️</button>
-      <span class="switch"><input type="checkbox" id="sim"> Simulate</span>
-      <span class="pill" id="devPill">device: …</span>
-      <span class="pill" id="verPill">v…</span>
+      <div class="presets" id="presets"></div>
+      <div class="rxstatus">
+        <span class="switch" title="Auto-refresh threat KPIs"><input type="checkbox" id="live"> Live</span>
+        <span class="pill" id="livePill">●</span>
+        <button class="iconbtn" id="themeBtn" title="Theme: auto / dark / light">🖥️</button>
+        <span class="switch"><input type="checkbox" id="sim"> Simulate</span>
+        <span class="pill" id="devPill">device: …</span>
+        <span class="pill" id="verPill">v…</span>
+      </div>
     </div>
 
     <!-- Threat KPI strip -->
@@ -195,46 +217,38 @@
 
     <!-- Spectrum -->
     <div class="card full section" id="spectrum">
-      <h2>Spectrum &amp; waterfall</h2>
+      <h2>Spectrum &amp; waterfall
+        <span class="exp"><button id="expPeaksCsv">⇩ peaks CSV</button><button id="expPeaksJson">⇩ JSON</button></span>
+      </h2>
       <div class="row">
-        <label>Start</label><input type="number" id="fStart" value="430" step="1"><span class="muted">MHz</span>
-        <label>Stop</label><input type="number" id="fStop" value="440" step="1"><span class="muted">MHz</span>
-        <button id="sweepBtn">Sweep</button>
-        <span class="switch"><input type="checkbox" id="autoSweep"> Auto</span>
+        <span class="switch"><input type="checkbox" id="autoSweep"> Auto-sweep</span>
         <span class="muted" id="sweepInfo"></span>
       </div>
       <div class="smeter" title="Strongest signal in view (approx. S-units from SNR over the noise floor)">
         <span class="smeter-label">S-METER</span>
-        <div class="smeter-track">
-          <div class="smeter-fill" id="smeterFill"></div>
-          <div class="smeter-peak" id="smeterPeak"></div>
-        </div>
+        <div class="smeter-track"><div class="smeter-fill" id="smeterFill"></div><div class="smeter-peak" id="smeterPeak"></div></div>
         <span class="smeter-val" id="smeterVal">—</span>
       </div>
       <div class="smeter-scale" aria-hidden="true">
         <span>S1</span><span>S3</span><span>S5</span><span>S7</span><span>S9</span><span>+20</span><span>+40</span>
       </div>
-      <canvas id="spectrum-cv" height="150"></canvas>
-      <canvas id="waterfall" height="130" style="margin-top:8px"></canvas>
+      <div class="canvas-wrap">
+        <canvas id="spectrum-cv" height="160"></canvas>
+        <div id="cursor"></div><div id="cursorTip"></div>
+      </div>
+      <canvas id="waterfall" height="140" style="margin-top:8px"></canvas>
       <div class="wf-ctl">
         <label>Colormap
           <select id="wfMap">
-            <option value="aqua">Aqua</option>
-            <option value="turbo">Turbo</option>
-            <option value="viridis">Viridis</option>
-            <option value="inferno">Inferno</option>
+            <option value="aqua">Aqua</option><option value="turbo">Turbo</option>
+            <option value="viridis">Viridis</option><option value="inferno">Inferno</option>
             <option value="gray">Grayscale</option>
           </select>
         </label>
         <label>Intensity <input type="range" id="wfGain" min="0.5" max="3" step="0.1" value="1"></label>
         <span class="muted" id="wfGainVal">1.0×</span>
-        <span class="grow" style="flex:1"></span>
-        <span class="exp" style="float:none">
-          <button id="expPeaksCsv">⇩ peaks CSV</button>
-          <button id="expPeaksJson">⇩ JSON</button>
-        </span>
       </div>
-      <div class="scroll" style="margin-top:10px">
+      <div class="scroll" style="margin-top:6px">
         <table id="peaks"><thead><tr><th>Freq (MHz)</th><th>Power dB</th><th>Bandwidth</th><th>Likely signal</th><th>Decoder</th></tr></thead><tbody></tbody></table>
       </div>
     </div>
@@ -257,6 +271,36 @@
           <button id="hopBtn" class="ghost">Hop detect</button>
         </div>
         <div id="threatOut" class="scroll"><p class="muted">Run a check to populate.</p></div>
+      </div>
+
+      <!-- Capture (receive-only) -->
+      <div class="card section" id="capture">
+        <h2>Capture IQ <span class="muted" style="text-transform:none;letter-spacing:0">· receive-only</span></h2>
+        <div class="row">
+          <label>Freq</label><input type="number" id="capFreq" value="433.92" step="0.01" style="width:110px"><span class="muted">MHz</span>
+          <label>Secs</label><input type="number" id="capSecs" value="3" step="1" style="width:70px">
+          <input type="text" id="capName" placeholder="name (optional)">
+          <button id="capBtn">Capture</button>
+        </div>
+        <div class="muted" id="capMsg">Records IQ + SigMF metadata to the server's capture dir. Simulated with no HackRF.</div>
+      </div>
+
+      <!-- Recordings -->
+      <div class="card section" id="recordings">
+        <h2>Recordings <span class="exp"><button id="recRefresh">⟳</button></span></h2>
+        <div class="scroll"><table id="recTbl"><thead><tr><th>Name</th><th>Freq</th><th>Length</th><th>Classification</th></tr></thead><tbody></tbody></table></div>
+      </div>
+
+      <!-- Emitters / EOB -->
+      <div class="card section" id="emitters">
+        <h2>Emitters — Electronic Order of Battle <span class="exp"><button id="eobRefresh">⟳</button><button id="expEobCsv">⇩ CSV</button></span></h2>
+        <div class="scroll"><table id="eobTbl"><thead><tr><th>Freq (MHz)</th><th>ITU</th><th>Likely</th><th>Max dB</th><th>Seen</th></tr></thead><tbody></tbody></table></div>
+      </div>
+
+      <!-- Sightings -->
+      <div class="card section" id="sightings">
+        <h2>Sightings — decoded IDs <span class="exp"><button id="sightRefresh">⟳</button></span></h2>
+        <div class="scroll"><table id="sightTbl"><thead><tr><th>Kind</th><th>ID</th><th>Count</th><th>Freq</th></tr></thead><tbody></tbody></table></div>
       </div>
 
       <!-- Bookmarks -->
@@ -300,105 +344,90 @@
 <!-- Peak detail drawer -->
 <div class="drawer-scrim" id="drawerScrim"></div>
 <aside class="drawer" id="drawer" aria-hidden="true">
-  <div class="dhead">
-    <h3 id="drwFreq">—</h3>
-    <button class="close" id="drwClose" title="Close">✕</button>
-  </div>
+  <div class="dhead"><h3 id="drwFreq">—</h3><button class="close" id="drwClose" title="Close">✕</button></div>
   <div class="dsub" id="drwSub"></div>
   <div id="drwBody"><p class="muted">Loading…</p></div>
-  <div class="dact">
-    <button class="mini" id="drwTune">Tune sweep here</button>
-    <button class="mini ghost" id="drwBookmark">★ Bookmark</button>
-  </div>
+  <div class="dact"><button class="mini" id="drwTune">Tune sweep here</button><button class="mini ghost" id="drwBookmark">★ Bookmark</button></div>
 </aside>
 
 <script>
 const $ = s => document.querySelector(s);
 const sim = () => $('#sim').checked ? '1' : '0';
-// Capture an API token from ?token=… (once), then keep it in sessionStorage and
-// send it as a bearer header so it never lingers in later request URLs.
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+// Capture an API token from ?token=… once, keep it in sessionStorage.
 (function(){ try{
   const t = new URLSearchParams(location.search).get('token');
-  if(t){ sessionStorage.setItem('rfh_token', t);
-    history.replaceState(null,'',location.pathname); }
+  if(t){ sessionStorage.setItem('rfh_token', t); history.replaceState(null,'',location.pathname); }
 }catch(e){} })();
-function authHeaders(extra){
-  const tok = sessionStorage.getItem('rfh_token');
-  const h = Object.assign({}, extra||{});
-  if(tok) h['Authorization']='Bearer '+tok;
-  return h;
-}
-async function api(p){
-  const r = await fetch(p, {headers:authHeaders()});
-  if(r.status===401){ throw new Error('unauthorized — append ?token=… to the URL'); }
-  if(!r.ok) throw new Error(r.status);
-  return r.json();
-}
-async function post(p, body){
-  const r = await fetch(p, {method:'POST',
-    headers:authHeaders({'Content-Type':'application/json'}), body:JSON.stringify(body||{})});
-  const data = await r.json().catch(()=>({}));
-  if(!r.ok) throw new Error(data.error || r.status);
-  return data;
-}
-function setKpi(id, val, cls){ const e=$(id); e.textContent=val; e.className='v '+(cls||''); }
+function authHeaders(extra){ const tok=sessionStorage.getItem('rfh_token'),h=Object.assign({},extra||{});
+  if(tok)h['Authorization']='Bearer '+tok; return h; }
+async function api(p){ const r=await fetch(p,{headers:authHeaders()});
+  if(r.status===401){throw new Error('unauthorized — append ?token=… to the URL');}
+  if(!r.ok)throw new Error(r.status); return r.json(); }
+async function post(p,body){ const r=await fetch(p,{method:'POST',
+    headers:authHeaders({'Content-Type':'application/json'}),body:JSON.stringify(body||{})});
+  const data=await r.json().catch(()=>({})); if(!r.ok)throw new Error(data.error||r.status); return data; }
+function setKpi(id,val,cls){ const e=$(id); e.textContent=val; e.className='v '+(cls||''); }
 
-// ---- theme toggle: auto → dark → light, persisted ----
-const THEMES=['auto','dark','light'], THEME_ICON={auto:'🖥️',dark:'🌙',light:'☀️'};
-function applyTheme(t){
-  if(t==='auto') document.documentElement.removeAttribute('data-theme');
+// ---- theme ----
+const THEMES=['auto','dark','light'],THEME_ICON={auto:'🖥️',dark:'🌙',light:'☀️'};
+function applyTheme(t){ if(t==='auto')document.documentElement.removeAttribute('data-theme');
   else document.documentElement.setAttribute('data-theme',t);
-  const b=$('#themeBtn'); if(b){b.textContent=THEME_ICON[t]; b.title='Theme: '+t+' (click to change)';}
-}
-function initTheme(){
-  let t=localStorage.getItem('rfh_theme'); if(!THEMES.includes(t)) t='auto';
-  applyTheme(t);
-  $('#themeBtn').onclick=()=>{
-    t=THEMES[(THEMES.indexOf(t)+1)%THEMES.length];
-    localStorage.setItem('rfh_theme',t); applyTheme(t);
-  };
+  const b=$('#themeBtn'); if(b){b.textContent=THEME_ICON[t];b.title='Theme: '+t+' (click to change)';} }
+function initTheme(){ let t=localStorage.getItem('rfh_theme'); if(!THEMES.includes(t))t='auto'; applyTheme(t);
+  $('#themeBtn').onclick=()=>{t=THEMES[(THEMES.indexOf(t)+1)%THEMES.length];localStorage.setItem('rfh_theme',t);applyTheme(t);}; }
+
+// ---- receiver bar ----
+const PRESETS=[['FM',88,108],['Air',118,137],['Marine',156,162],['70cm',430,440],
+  ['ISM868',867,869],['ISM915',902,928],['ADS-B',1088,1092],['GPS',1573,1577],['DECT',1880,1900]];
+function rxRange(){ return [parseFloat($('#fStart').value)||0, parseFloat($('#fStop').value)||0]; }
+function setRange(lo,hi,doIt){ $('#fStart').value=(+lo).toFixed(3).replace(/\.?0+$/,'');
+  $('#fStop').value=(+hi).toFixed(3).replace(/\.?0+$/,''); updateRxReadout(); if(doIt)doSweep(); }
+function updateRxReadout(){ const [lo,hi]=rxRange(); const c=(lo+hi)/2,span=hi-lo;
+  $('#rxCenter').textContent=isFinite(c)?c.toFixed(3):'—';
+  $('#rxSpan').textContent='span '+(isFinite(span)?span.toFixed(2):'—')+' MHz'; }
+function initRx(){
+  const p=$('#presets'); PRESETS.forEach(([n,lo,hi])=>{ const c=document.createElement('span');
+    c.className='chip'; c.textContent=n; c.title=`${lo}–${hi} MHz`; c.onclick=()=>setRange(lo,hi,true); p.appendChild(c); });
+  $('#fStart').oninput=updateRxReadout; $('#fStop').oninput=updateRxReadout;
+  $('#zoomIn').onclick=()=>{const[lo,hi]=rxRange(),c=(lo+hi)/2,s=(hi-lo)/4;setRange(c-s,c+s,true);};
+  $('#zoomOut').onclick=()=>{const[lo,hi]=rxRange(),c=(lo+hi)/2,s=(hi-lo);setRange(Math.max(1,c-s),c+s,true);};
+  $('#stepUp').onclick=()=>{const[lo,hi]=rxRange(),s=hi-lo;setRange(lo+s,hi+s,true);};
+  $('#stepDown').onclick=()=>{const[lo,hi]=rxRange(),s=hi-lo;setRange(Math.max(1,lo-s),Math.max(1+s,hi-s),true);};
+  updateRxReadout();
 }
 
-// clock
-setInterval(()=>{ $('#clock').textContent = new Date().toUTCString().replace('GMT','UTC'); }, 1000);
-
-// nav highlight
+// clock unused; nav highlight
 document.querySelectorAll('.nav a').forEach(a=>a.onclick=()=>{
   document.querySelectorAll('.nav a').forEach(x=>x.classList.remove('active')); a.classList.add('active');});
 
 // ---- spectrum + waterfall ----
 const specCv=$('#spectrum-cv'), wfCv=$('#waterfall'); let wfRows=[];
-function fit(cv){const w=cv.clientWidth; if(cv.width!==w)cv.width=w; return cv.width;}
-// Waterfall colormaps. `aqua` is the original teal ramp; the rest interpolate a
-// 5-stop palette. Intensity (wfGain) scales v before mapping, so changing either
-// re-colours the existing waterfall without a fresh sweep.
 let wfMap='aqua', wfGain=1;
-const CMAPS={
-  viridis:[[68,1,84],[59,82,139],[33,145,140],[94,201,98],[253,231,37]],
+const CMAPS={viridis:[[68,1,84],[59,82,139],[33,145,140],[94,201,98],[253,231,37]],
   inferno:[[0,0,4],[87,16,110],[188,55,84],[249,142,9],[252,255,164]],
-  turbo:[[48,18,59],[65,169,241],[42,231,140],[249,206,50],[221,50,20]],
-};
+  turbo:[[48,18,59],[65,169,241],[42,231,140],[249,206,50],[221,50,20]]};
 function lerpPal(pal,v){const n=pal.length-1,x=Math.max(0,Math.min(1,v))*n,i=Math.min(n-1,Math.floor(x)),t=x-i,
   a=pal[i],b=pal[i+1];return[a[0]+(b[0]-a[0])*t|0,a[1]+(b[1]-a[1])*t|0,a[2]+(b[2]-a[2])*t|0];}
 function aqua(v){const r=Math.max(0,Math.min(255,255*(v-0.5)*2)),g=Math.max(0,Math.min(255,255*(1-Math.abs(v-0.6)*2))),b=Math.max(0,Math.min(255,255*(0.75-v)*2));return[r|0,g|0,b|0];}
-function colormap(v){
-  v=Math.max(0,Math.min(1,v*wfGain));
-  if(wfMap==='gray'){const c=255*v|0;return[c,c,c];}
-  if(wfMap==='aqua') return aqua(v);
-  return lerpPal(CMAPS[wfMap]||CMAPS.turbo, v);
-}
+function colormap(v){ v=Math.max(0,Math.min(1,v*wfGain));
+  if(wfMap==='gray'){const c=255*v|0;return[c,c,c];} if(wfMap==='aqua')return aqua(v);
+  return lerpPal(CMAPS[wfMap]||CMAPS.turbo,v); }
+function fit(cv){const w=cv.clientWidth; if(cv.width!==w)cv.width=w; return cv.width;}
+let lastSpec=null;
 function drawSpectrum(d){
+  lastSpec=d;
   const w=fit(specCv),h=specCv.height,ctx=specCv.getContext('2d');ctx.clearRect(0,0,w,h);
   const s=d.spectrum,min=d.min_db-3,max=d.max_db+3,rng=Math.max(1,max-min);
-  ctx.strokeStyle='#16202f';ctx.lineWidth=1;  // fixed: scope canvas is always dark
-  for(let i=0;i<=4;i++){const y=h*i/4;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}
+  ctx.strokeStyle='#16202f';ctx.lineWidth=1;ctx.fillStyle='#8595a8';ctx.font='10px system-ui';
+  for(let i=0;i<=4;i++){const y=h*i/4;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();
+    ctx.fillText((max-rng*i/4).toFixed(0)+' dB',3,y+10);}
   ctx.beginPath();ctx.moveTo(0,h);
   for(let i=0;i<s.length;i++){const x=w*i/(s.length-1),y=h-((s[i]-min)/rng)*h;ctx.lineTo(x,y);}
   ctx.lineTo(w,h);ctx.closePath();ctx.fillStyle='rgba(56,224,200,.16)';ctx.fill();
   ctx.beginPath();for(let i=0;i<s.length;i++){const x=w*i/(s.length-1),y=h-((s[i]-min)/rng)*h;i?ctx.lineTo(x,y):ctx.moveTo(x,y);}
   ctx.strokeStyle='#38e0c8';ctx.lineWidth=1.6;ctx.stroke();
-  ctx.fillStyle='#8595a8';ctx.font='11px system-ui';
-  ctx.fillText(d.start_mhz.toFixed(1)+' MHz',5,h-5);ctx.fillText(d.stop_mhz.toFixed(1)+' MHz',w-72,h-5);
+  ctx.fillStyle='#8595a8';ctx.fillText(d.start_mhz.toFixed(1)+' MHz',40,h-5);ctx.fillText(d.stop_mhz.toFixed(1)+' MHz',w-72,h-5);
   if(d.itu_label){ctx.fillStyle='#38e0c8';ctx.textAlign='center';ctx.fillText('▬ '+d.itu_label+' ▬',w/2,h-5);ctx.textAlign='left';}
   wfRows.unshift(s.map(v=>(v-min)/rng));if(wfRows.length>wfCv.height)wfRows.pop();drawWaterfall();
 }
@@ -409,90 +438,75 @@ function drawWaterfall(){
       img.data[o]=c[0];img.data[o+1]=c[1];img.data[o+2]=c[2];img.data[o+3]=255;}}
   ctx.putImageData(img,0,0);
 }
-// S-meter: map SNR-over-floor to an approximate S-unit reading. The scale runs
-// S1..S9 across the first ~48 dB (6 dB per S-unit) then +20/+40 over-S9, so the
-// bar and the S1 S3 S5 S7 S9 +20 +40 ticks line up. Absolute dBm isn't available
-// (receiver isn't calibrated), so this is a relative strength indicator.
-let smeterPeakPct=0, smeterPeakDecay=null;
-function snrToSUnit(snr){
-  if(snr>=54) return 'S9+'+Math.round((snr-54)/1)*1+'dB';   // over S9
-  if(snr>=48) return 'S9+'+Math.round(snr-48)+'dB';
-  return 'S'+Math.max(1,Math.min(9,Math.round(snr/6)));
-}
-function snrToPct(snr){ return Math.max(2,Math.min(100,snr/60*100)); } // 0–60 dB across the bar
+// hover cursor → freq/dB readout; click → drawer
+(function(){ const wrap=specCv.parentElement,cur=$('#cursor'),tip=$('#cursorTip');
+  function fx(ev){ const r=specCv.getBoundingClientRect(); return Math.max(0,Math.min(1,(ev.clientX-r.left)/r.width)); }
+  specCv.onmousemove=ev=>{ if(!lastSpec)return; const f=fx(ev),freq=lastSpec.start_mhz+(lastSpec.stop_mhz-lastSpec.start_mhz)*f;
+    const idx=Math.min(lastSpec.spectrum.length-1,Math.round(f*(lastSpec.spectrum.length-1))),db=lastSpec.spectrum[idx];
+    cur.style.display='block';cur.style.left=(f*100)+'%';
+    tip.style.display='block';tip.style.left=(f*100)+'%';tip.textContent=freq.toFixed(3)+' MHz · '+db.toFixed(0)+' dB'; };
+  specCv.onmouseleave=()=>{cur.style.display='none';tip.style.display='none';};
+  specCv.onclick=ev=>{ if(!lastSpec)return; const f=fx(ev),freq=lastSpec.start_mhz+(lastSpec.stop_mhz-lastSpec.start_mhz)*f;
+    openPeakDrawer(freq); };
+})();
+// S-meter
+let smeterPeakPct=0,smeterPeakDecay=null;
+function snrToSUnit(snr){ if(snr>=54)return'S9+'+Math.round(snr-54)+'dB'; if(snr>=48)return'S9+'+Math.round(snr-48)+'dB';
+  return 'S'+Math.max(1,Math.min(9,Math.round(snr/6))); }
 function updateSMeter(d){
-  const snr=Math.max(0,(d.max_db??d.noise_floor_db)-d.noise_floor_db);
-  const pct=snrToPct(snr);
+  const snr=Math.max(0,(d.max_db??d.noise_floor_db)-d.noise_floor_db),pct=Math.max(2,Math.min(100,snr/60*100));
   const col=snr>35?'var(--bad)':snr>20?'var(--warn)':'var(--ok)';
-  const fill=$('#smeterFill'); fill.style.width=pct+'%'; fill.style.background=col;
-  // Strongest peak frequency, if any.
-  let fTxt=''; if(d.peaks&&d.peaks.length){
-    const top=d.peaks.reduce((a,b)=>b.power_db>a.power_db?b:a);
-    fTxt=' · '+top.freq_mhz.toFixed(3)+' MHz';
-  }
+  const fill=$('#smeterFill');fill.style.width=pct+'%';fill.style.background=col;
+  let fTxt=''; if(d.peaks&&d.peaks.length){const top=d.peaks.reduce((a,b)=>b.power_db>a.power_db?b:a);fTxt=' · '+top.freq_mhz.toFixed(3)+' MHz';}
   $('#smeterVal').textContent=snrToSUnit(snr)+' ('+snr.toFixed(0)+' dB)'+fTxt;
-  // Peak-hold marker with slow decay.
-  if(pct>=smeterPeakPct){ smeterPeakPct=pct; }
-  $('#smeterPeak').style.left='calc('+smeterPeakPct+'% - 1px)';
-  if(smeterPeakDecay) clearInterval(smeterPeakDecay);
-  smeterPeakDecay=setInterval(()=>{
-    smeterPeakPct=Math.max(pct,smeterPeakPct-1.5);
+  if(pct>=smeterPeakPct)smeterPeakPct=pct; $('#smeterPeak').style.left='calc('+smeterPeakPct+'% - 1px)';
+  if(smeterPeakDecay)clearInterval(smeterPeakDecay);
+  smeterPeakDecay=setInterval(()=>{smeterPeakPct=Math.max(pct,smeterPeakPct-1.5);
     $('#smeterPeak').style.left='calc('+smeterPeakPct+'% - 1px)';
-    if(smeterPeakPct<=pct){ clearInterval(smeterPeakDecay); smeterPeakDecay=null; }
-  },200);
+    if(smeterPeakPct<=pct){clearInterval(smeterPeakDecay);smeterPeakDecay=null;}},200);
 }
 async function doSweep(){
+  updateRxReadout();
   try{const d=await api(`/api/sweep?start=${$('#fStart').value}&stop=${$('#fStop').value}&simulate=${sim()}`);
     lastSweep=d; drawSpectrum(d); updateSMeter(d);
     $('#sweepInfo').textContent=`floor ${d.noise_floor_db} dB · ${d.peaks.length} peaks`+(d.simulated?' · SIMULATED':'');
     const tb=$('#peaks tbody');tb.innerHTML='';
     d.peaks.forEach(p=>tb.insertAdjacentHTML('beforeend',
       `<tr style="cursor:pointer" title="Click for details" data-f="${p.freq_mhz.toFixed(4)}" data-bw="${p.bandwidth_khz||''}"><td>${p.freq_mhz.toFixed(4)}</td><td>${p.power_db}</td><td>${p.bandwidth_khz?p.bandwidth_khz.toFixed(0)+' kHz':'—'}</td><td>${p.guess||p.band||'—'} ${p.confidence?`<span class="muted">${p.confidence}%</span>`:''}</td><td>${p.decoder?`<span class="tag">${p.decoder}</span>`:'—'}</td></tr>`));
-    tb.querySelectorAll('tr[data-f]').forEach(tr=>tr.onclick=()=>openPeakDrawer(tr.dataset.f, tr.dataset.bw));
+    tb.querySelectorAll('tr[data-f]').forEach(tr=>tr.onclick=()=>openPeakDrawer(tr.dataset.f,tr.dataset.bw));
   }catch(e){$('#sweepInfo').textContent='error: '+e.message;}
 }
 async function doRecon(){
   $('#reconInfo').textContent='running…';
-  const d=await api(`/api/recon?simulate=${sim()}`);
-  lastRecon=d;
+  const d=await api(`/api/recon?simulate=${sim()}`); lastRecon=d;
   $('#reconInfo').textContent=`${d.active}/${d.total} active`+(d.simulated?' · SIMULATED':'');
-  setKpi('#kpiBands', d.active, d.active? 'warn':'ok');
+  setKpi('#kpiBands',d.active,d.active?'warn':'ok');
   const tb=$('#reconTbl tbody');tb.innerHTML='';
   d.findings.forEach(f=>tb.insertAdjacentHTML('beforeend',
-    `<tr><td>${f.band}</td><td>${f.active?'<span class=alert>active</span>':'<span class=muted>quiet</span>'}</td><td>${f.peaks}</td><td>${f.strongest_mhz?f.strongest_mhz.toFixed(3):'—'}</td><td>${f.decoder||'—'}</td></tr>`));
+    `<tr><td>${esc(f.band)}</td><td>${f.active?'<span class=alert>active</span>':'<span class=muted>quiet</span>'}</td><td>${f.peaks}</td><td>${f.strongest_mhz?f.strongest_mhz.toFixed(3):'—'}</td><td>${f.decoder||'—'}</td></tr>`));
 }
-function threatHtml(title,count,rowsHtml){
-  return (count?`<p class="alert">${title}: ${count}</p>`:`<p class="clean">${title}: none</p>`)+(rowsHtml||'');
-}
-async function doDrone(){
-  const d=await api(`/api/defense/drone?simulate=${sim()}`);
-  setKpi('#kpiDrone', d.hits.length, d.hits.length?'bad':'ok');
-  let h=d.hits.map(x=>`<div class="muted">• ${x.band} — ${x.freq_mhz} MHz (${x.confidence})</div>`).join('');
-  $('#threatOut').innerHTML=threatHtml('Counter-UAS detections',d.hits.length,h);
-}
-async function doAdsb(){
-  const d=await api(`/api/defense/spoof/adsb?simulate=${sim()}`);
-  setKpi('#kpiSpoof', d.findings.length, d.findings.length?'bad':'ok');
-  let h=d.findings.map(f=>`<div class="muted">• <span class="sev-high">[high]</span> <b>${f.id}</b> — ${f.kind}: ${f.detail}</div>`).join('');
-  $('#threatOut').innerHTML=threatHtml('ADS-B spoofing indicators',d.findings.length,h);
-}
-async function doImsi(){
-  const d=await api(`/api/defense/imsi?simulate=${sim()}`);
-  setKpi('#kpiImsi', d.alerts.length?d.score:0, d.alerts.length?'bad':'ok');
-  let h=d.alerts.map(a=>`<div class="muted">• <span class="sev-${a.severity}">[${a.severity}]</span> CID=${a.cid} ${a.indicator}: ${a.detail}</div>`).join('');
-  $('#threatOut').innerHTML=`<p class="${d.alerts.length?'alert':'clean'}">Rogue-BTS likelihood ${d.score}/100</p>`+h;
-}
-async function doHop(){
-  const d=await api(`/api/defense/hop?simulate=${sim()}`);
-  $('#threatOut').innerHTML=`<p class="${d.hopping_suspected?'alert':'clean'}">Frequency hopping ${d.hopping_suspected?'SUSPECTED':'not detected'}</p><div class="muted">${d.detail}</div>`;
-}
+function threatHtml(title,count,rowsHtml){return (count?`<p class="alert">${title}: ${count}</p>`:`<p class="clean">${title}: none</p>`)+(rowsHtml||'');}
+async function doDrone(){ const d=await api(`/api/defense/drone?simulate=${sim()}`);
+  setKpi('#kpiDrone',d.hits.length,d.hits.length?'bad':'ok');
+  let h=d.hits.map(x=>`<div class="muted">• ${esc(x.band)} — ${x.freq_mhz} MHz (${x.confidence})</div>`).join('');
+  $('#threatOut').innerHTML=threatHtml('Counter-UAS detections',d.hits.length,h); }
+async function doAdsb(){ const d=await api(`/api/defense/spoof/adsb?simulate=${sim()}`);
+  setKpi('#kpiSpoof',d.findings.length,d.findings.length?'bad':'ok');
+  let h=d.findings.map(f=>`<div class="muted">• <span class="sev-high">[high]</span> <b>${esc(f.id)}</b> — ${esc(f.kind)}: ${esc(f.detail)}</div>`).join('');
+  $('#threatOut').innerHTML=threatHtml('ADS-B spoofing indicators',d.findings.length,h); }
+async function doImsi(){ const d=await api(`/api/defense/imsi?simulate=${sim()}`);
+  setKpi('#kpiImsi',d.alerts.length?d.score:0,d.alerts.length?'bad':'ok');
+  let h=d.alerts.map(a=>`<div class="muted">• <span class="sev-${a.severity}">[${a.severity}]</span> CID=${a.cid} ${esc(a.indicator)}: ${esc(a.detail)}</div>`).join('');
+  $('#threatOut').innerHTML=`<p class="${d.alerts.length?'alert':'clean'}">Rogue-BTS likelihood ${d.score}/100</p>`+h; }
+async function doHop(){ const d=await api(`/api/defense/hop?simulate=${sim()}`);
+  $('#threatOut').innerHTML=`<p class="${d.hopping_suspected?'alert':'clean'}">Frequency hopping ${d.hopping_suspected?'SUSPECTED':'not detected'}</p><div class="muted">${esc(d.detail)}</div>`; }
+
 let allBands=[];
-function renderBands(){
-  const q=$('#bandSearch').value.toLowerCase(),tb=$('#bandsTbl tbody');tb.innerHTML='';
+function renderBands(){ const q=$('#bandSearch').value.toLowerCase(),tb=$('#bandsTbl tbody');tb.innerHTML='';
   allBands.filter(b=>!q||b.name.toLowerCase().includes(q)||b.category.includes(q)||(b.tags||[]).join(' ').includes(q))
    .forEach(b=>tb.insertAdjacentHTML('beforeend',
-     `<tr><td>${b.low_mhz.toFixed(3)}–${b.high_mhz.toFixed(3)}</td><td>${b.name}</td><td>${b.category}</td><td>${b.decoder||'—'}</td></tr>`));
-}
+     `<tr><td>${b.low_mhz.toFixed(3)}–${b.high_mhz.toFixed(3)}</td><td>${esc(b.name)}</td><td>${esc(b.category)}</td><td>${b.decoder||'—'}</td></tr>`)); }
+async function loadBands(){allBands=(await api('/api/bands')).bands;renderBands();}
 async function loadStatus(){
   const d=await api('/api/status');
   $('#verPill').textContent='v'+d.version;$('#ver2').textContent='v'+d.version;
@@ -503,157 +517,138 @@ async function loadStatus(){
   $('#hw').innerHTML=`LNA ${hw.lna_gain} dB · VGA ${hw.vga_gain} dB · amp ${hw.amp_enable?'on':'off'} · bias-tee ${hw.antenna_power?'on':'off'} · ${(hw.sample_rate/1e6)} MSPS`;
   const tb=$('#tools tbody');tb.innerHTML='';
   d.tools.forEach(t=>tb.insertAdjacentHTML('beforeend',
-    `<tr><td>${t.name}</td><td>${t.installed?'<span class=clean>✓</span>':'<span class=muted>—</span>'}</td><td class=muted>${t.purpose}</td></tr>`));
+    `<tr><td>${esc(t.name)}</td><td>${t.installed?'<span class=clean>✓</span>':'<span class=muted>—</span>'}</td><td class=muted>${esc(t.purpose)}</td></tr>`));
 }
-async function loadBands(){allBands=(await api('/api/bands')).bands;renderBands();}
-function tuneTo(freq){
-  const f=+freq; $('#atFreq').value=f.toFixed(4); doAt();
-  $('#fStart').value=(f-1).toFixed(2); $('#fStop').value=(f+1).toFixed(2); doSweep();
-  document.getElementById('spectrum').scrollIntoView({behavior:'smooth',block:'start'});
-}
-function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-function renderBookmarks(bm){
-  const el=$('#bmOut');
+function tuneTo(freq){ const f=+freq; $('#atFreq').value=f.toFixed(4); doAt();
+  setRange(f-1,f+1,true); document.getElementById('spectrum').scrollIntoView({behavior:'smooth',block:'start'}); }
+
+// ---- bookmarks ----
+function renderBookmarks(bm){ const el=$('#bmOut');
   if(!bm.length){el.innerHTML='<p class="muted">No bookmarks yet — add one below, or ★ the sweep centre.</p>';return;}
   el.innerHTML=bm.sort((a,b)=>(a.freq_mhz||0)-(b.freq_mhz||0)).map(b=>
-    `<div class="bm-row"><div class="bm-tune" data-f="${b.freq_mhz}" title="Click to tune">`+
-    `<span>${esc(b.name)}${b.note?` <span class="muted">· ${esc(b.note)}</span>`:''}</span>`+
-    `<span class="f">${(+b.freq_mhz).toFixed(4)} MHz</span></div>`+
-    `<button class="bm-del" data-name="${esc(b.name)}" title="Delete">✕</button></div>`).join('');
+    `<div class="bm-row"><div class="bm-tune" data-f="${b.freq_mhz}" title="Click to tune"><span>${esc(b.name)}${b.note?` <span class="muted">· ${esc(b.note)}</span>`:''}</span><span class="f">${(+b.freq_mhz).toFixed(4)} MHz</span></div><button class="bm-del" data-name="${esc(b.name)}" title="Delete">✕</button></div>`).join('');
   el.querySelectorAll('.bm-tune').forEach(r=>r.onclick=()=>tuneTo(r.dataset.f));
-  el.querySelectorAll('.bm-del').forEach(x=>x.onclick=()=>delBookmark(x.dataset.name));
-}
+  el.querySelectorAll('.bm-del').forEach(x=>x.onclick=()=>delBookmark(x.dataset.name)); }
 async function loadBookmarks(){ renderBookmarks((await api('/api/bookmarks')).bookmarks||[]); }
-function bmMsg(t,bad){const e=$('#bmMsg');e.textContent=t;e.style.color=bad?'var(--bad)':'var(--dim)';
-  if(t)setTimeout(()=>{e.textContent='';},2500);}
-async function addBookmark(){
-  const name=$('#bmName').value.trim(), freq=parseFloat($('#bmFreq').value), note=$('#bmNote').value.trim();
+function bmMsg(t,bad){const e=$('#bmMsg');e.textContent=t;e.style.color=bad?'var(--bad)':'var(--dim)';if(t)setTimeout(()=>{e.textContent='';},2500);}
+async function addBookmark(){ const name=$('#bmName').value.trim(),freq=parseFloat($('#bmFreq').value),note=$('#bmNote').value.trim();
   if(!name||!(freq>0)){bmMsg('Enter a name and a positive frequency.',true);return;}
   try{ renderBookmarks((await post('/api/bookmarks/add',{name,freq_mhz:freq,note})).bookmarks);
-    $('#bmName').value='';$('#bmFreq').value='';$('#bmNote').value=''; bmMsg('Saved “'+name+'”.'); }
-  catch(e){ bmMsg('Error: '+e.message,true); }
-}
-async function delBookmark(name){
-  try{ renderBookmarks((await post('/api/bookmarks/delete',{name})).bookmarks); bmMsg('Removed “'+name+'”.'); }
-  catch(e){ bmMsg('Error: '+e.message,true); }
-}
-function bookmarkCenter(){
-  const c=((parseFloat($('#fStart').value)+parseFloat($('#fStop').value))/2);
-  if(c>0){ $('#bmFreq').value=c.toFixed(3); if(!$('#bmName').value) $('#bmName').value='mark '+c.toFixed(3); }
-}
-// ---- export (CSV / JSON) ----
-let lastSweep=null, lastRecon=null;
-function download(name,text,mime){const b=new Blob([text],{type:mime}),u=URL.createObjectURL(b),
-  a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);}
+    $('#bmName').value='';$('#bmFreq').value='';$('#bmNote').value='';bmMsg('Saved “'+name+'”.'); }
+  catch(e){bmMsg('Error: '+e.message,true);} }
+async function delBookmark(name){ try{ renderBookmarks((await post('/api/bookmarks/delete',{name})).bookmarks); bmMsg('Removed “'+name+'”.'); }
+  catch(e){bmMsg('Error: '+e.message,true);} }
+function bookmarkCenter(){ const c=((parseFloat($('#fStart').value)+parseFloat($('#fStop').value))/2);
+  if(c>0){$('#bmFreq').value=c.toFixed(3); if(!$('#bmName').value)$('#bmName').value='mark '+c.toFixed(3);} }
+
+// ---- capture / recordings / emitters / sightings ----
+function capMsg(t,bad){const e=$('#capMsg');e.textContent=t;e.style.color=bad?'var(--bad)':'var(--dim)';}
+async function doCapture(){ const freq=parseFloat($('#capFreq').value),secs=parseFloat($('#capSecs').value),name=$('#capName').value.trim();
+  if(!(freq>0)||!(secs>0)){capMsg('Enter a positive frequency and duration.',true);return;}
+  capMsg('Capturing…');
+  try{ const d=await post(`/api/capture?simulate=${sim()}`,{freq_mhz:freq,seconds:secs,name:name||undefined});
+    capMsg(`Saved ${d.name} (${d.seconds}s @ ${d.freq_mhz} MHz${d.simulated?' · simulated':''}).`); loadRecordings(); }
+  catch(e){capMsg('Error: '+e.message,true);} }
+async function loadRecordings(){ const d=await api('/api/recordings'),tb=$('#recTbl tbody');tb.innerHTML='';
+  if(!d.recordings.length){tb.innerHTML='<tr><td colspan=4 class=muted>No recordings yet.</td></tr>';return;}
+  d.recordings.forEach(r=>tb.insertAdjacentHTML('beforeend',
+    `<tr><td>${esc(r.name)}</td><td>${r.freq_mhz?r.freq_mhz.toFixed(3):'—'}</td><td>${r.seconds?r.seconds.toFixed(1)+'s':'—'}</td><td>${r.guess?esc(r.guess)+(r.guess_confidence?` <span class=muted>${r.guess_confidence}%</span>`:''):'—'}</td></tr>`)); }
+let lastEob=[];
+async function loadEmitters(){ const d=await api('/api/emitters');lastEob=d.emitters;const tb=$('#eobTbl tbody');tb.innerHTML='';
+  if(!d.emitters.length){tb.innerHTML='<tr><td colspan=5 class=muted>Empty — build it with the automation `emitters` task or `sigint emitters --scan`.</td></tr>';return;}
+  d.emitters.forEach(e=>tb.insertAdjacentHTML('beforeend',
+    `<tr style="cursor:pointer" data-f="${e.freq_mhz}"><td>${e.freq_mhz.toFixed(4)}</td><td>${esc(e.itu||'—')}</td><td>${esc(e.guess||'—')}</td><td>${e.max_power_db??'—'}</td><td>${e.count}</td></tr>`));
+  tb.querySelectorAll('tr[data-f]').forEach(tr=>tr.onclick=()=>openPeakDrawer(tr.dataset.f)); }
+async function loadSightings(){ const d=await api('/api/sightings'),tb=$('#sightTbl tbody');tb.innerHTML='';
+  if(!d.sightings.length){tb.innerHTML='<tr><td colspan=4 class=muted>No sightings — decode with `--track`.</td></tr>';return;}
+  d.sightings.forEach(s=>tb.insertAdjacentHTML('beforeend',
+    `<tr><td>${esc(s.kind)}</td><td>${esc(s.id)}</td><td>${s.count}</td><td>${s.freq_mhz?(+s.freq_mhz).toFixed(3):'—'}</td></tr>`)); }
+
+// ---- export ----
+let lastSweep=null,lastRecon=null;
+function download(name,text,mime){const b=new Blob([text],{type:mime}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);}
 function csvCell(s){s=s==null?'':String(s);return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}
 function toCSV(headers,rows){return [headers.join(','),...rows.map(r=>r.map(csvCell).join(','))].join('\n');}
 function ts(){return new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);}
 function exportPeaks(fmt){ if(!lastSweep){bmMsg('Run a sweep first.',true);return;}
-  if(fmt==='json') return download(`rfhound-peaks-${ts()}.json`,JSON.stringify(lastSweep,null,2),'application/json');
+  if(fmt==='json')return download(`rfhound-peaks-${ts()}.json`,JSON.stringify(lastSweep,null,2),'application/json');
   const rows=(lastSweep.peaks||[]).map(p=>[p.freq_mhz,p.power_db,p.bandwidth_khz||'',p.guess||p.band||'',p.confidence||'',p.decoder||'']);
   download(`rfhound-peaks-${ts()}.csv`,toCSV(['freq_mhz','power_db','bandwidth_khz','likely','confidence','decoder'],rows),'text/csv'); }
 function exportRecon(fmt){ if(!lastRecon){bmMsg('Run recon first.',true);return;}
-  if(fmt==='json') return download(`rfhound-recon-${ts()}.json`,JSON.stringify(lastRecon,null,2),'application/json');
+  if(fmt==='json')return download(`rfhound-recon-${ts()}.json`,JSON.stringify(lastRecon,null,2),'application/json');
   const rows=(lastRecon.findings||[]).map(f=>[f.band,f.category,f.active?'active':'quiet',f.peaks,f.strongest_mhz||'',f.strongest_db||'',f.decoder||'']);
   download(`rfhound-recon-${ts()}.csv`,toCSV(['band','category','status','peaks','strongest_mhz','strongest_db','decoder'],rows),'text/csv'); }
-function exportBands(fmt){ if(!allBands.length){return;}
-  if(fmt==='json') return download(`rfhound-bands-${ts()}.json`,JSON.stringify(allBands,null,2),'application/json');
+function exportBands(fmt){ if(!allBands.length)return;
+  if(fmt==='json')return download(`rfhound-bands-${ts()}.json`,JSON.stringify(allBands,null,2),'application/json');
   const rows=allBands.map(b=>[b.low_mhz,b.high_mhz,b.name,b.category,b.decoder||'',(b.tags||[]).join(' ')]);
   download(`rfhound-bands-${ts()}.csv`,toCSV(['low_mhz','high_mhz','name','category','decoder','tags'],rows),'text/csv'); }
+function exportEob(){ if(!lastEob.length)return;
+  const rows=lastEob.map(e=>[e.freq_mhz,e.itu||'',e.guess||'',e.max_power_db??'',e.bandwidth_khz??'',e.count]);
+  download(`rfhound-eob-${ts()}.csv`,toCSV(['freq_mhz','itu','likely','max_power_db','bandwidth_khz','count'],rows),'text/csv'); }
 
-// ---- waterfall colormap / intensity ----
-function initWaterfallCtl(){
-  wfMap=localStorage.getItem('rfh_wfmap')||'aqua';
-  wfGain=parseFloat(localStorage.getItem('rfh_wfgain'))||1;
-  $('#wfMap').value=wfMap; $('#wfGain').value=wfGain; $('#wfGainVal').textContent=wfGain.toFixed(1)+'×';
+// ---- waterfall control ----
+function initWaterfallCtl(){ wfMap=localStorage.getItem('rfh_wfmap')||'aqua'; wfGain=parseFloat(localStorage.getItem('rfh_wfgain'))||1;
+  $('#wfMap').value=wfMap;$('#wfGain').value=wfGain;$('#wfGainVal').textContent=wfGain.toFixed(1)+'×';
   $('#wfMap').onchange=e=>{wfMap=e.target.value;localStorage.setItem('rfh_wfmap',wfMap);drawWaterfall();};
-  $('#wfGain').oninput=e=>{wfGain=parseFloat(e.target.value);$('#wfGainVal').textContent=wfGain.toFixed(1)+'×';
-    localStorage.setItem('rfh_wfgain',wfGain);drawWaterfall();};
-}
+  $('#wfGain').oninput=e=>{wfGain=parseFloat(e.target.value);$('#wfGainVal').textContent=wfGain.toFixed(1)+'×';localStorage.setItem('rfh_wfgain',wfGain);drawWaterfall();}; }
 
-// ---- live threat-KPI auto-refresh ----
+// ---- live KPI auto-refresh ----
 let liveTimer=null;
 async function refreshKpis(){ try{await doDrone();await doAdsb();await doImsi();}catch(e){} }
-function setLive(on){
-  const pill=$('#livePill');
-  if(on){ pill.style.display=''; pill.classList.add('on'); refreshKpis();
-    liveTimer=setInterval(refreshKpis,5000); }
-  else{ pill.style.display='none'; pill.classList.remove('on');
-    if(liveTimer)clearInterval(liveTimer); liveTimer=null; }
-}
+function setLive(on){ const pill=$('#livePill');
+  if(on){pill.style.display='';pill.classList.add('on');refreshKpis();liveTimer=setInterval(refreshKpis,5000);}
+  else{pill.style.display='none';pill.classList.remove('on');if(liveTimer)clearInterval(liveTimer);liveTimer=null;} }
 
 // ---- peak detail drawer ----
 let drawerFreq=null;
-function openDrawer(){$('#drawer').classList.add('open');$('#drawerScrim').classList.add('open');
-  $('#drawer').setAttribute('aria-hidden','false');}
-function closeDrawer(){$('#drawer').classList.remove('open');$('#drawerScrim').classList.remove('open');
-  $('#drawer').setAttribute('aria-hidden','true');}
-async function openPeakDrawer(freq, bw){
-  freq=+freq; drawerFreq=freq;
-  $('#drwFreq').textContent=freq.toFixed(4)+' MHz';
-  $('#drwSub').textContent=''; $('#drwBody').innerHTML='<p class="muted">Loading…</p>';
-  openDrawer();
-  try{
-    const at=await api(`/api/at?freq=${freq}`);
-    const cl=await api(`/api/classify?freq=${freq}`+(bw?`&bw=${bw}`:''));
+function openDrawer(){$('#drawer').classList.add('open');$('#drawerScrim').classList.add('open');$('#drawer').setAttribute('aria-hidden','false');}
+function closeDrawer(){$('#drawer').classList.remove('open');$('#drawerScrim').classList.remove('open');$('#drawer').setAttribute('aria-hidden','true');}
+async function openPeakDrawer(freq,bw){ freq=+freq;drawerFreq=freq;
+  $('#drwFreq').textContent=freq.toFixed(4)+' MHz';$('#drwSub').textContent='';$('#drwBody').innerHTML='<p class="muted">Loading…</p>';openDrawer();
+  try{ const at=await api(`/api/at?freq=${freq}`),cl=await api(`/api/classify?freq=${freq}`+(bw?`&bw=${bw}`:''));
     let h='';
-    if(at.found){
-      $('#drwSub').innerHTML=`<b style="color:var(--accent)">${esc(at.band)}</b> · `+
-        `<span class="tag">${esc(at.category)}</span> · `+
-        `${at.range_mhz[0].toFixed(3)}–${at.range_mhz[1].toFixed(3)} MHz`;
-      h+='<h4>What’s here</h4>';
-      if(at.description) h+=`<div class="kv">${esc(at.description)}</div>`;
+    if(at.found){ $('#drwSub').innerHTML=`<b style="color:var(--accent)">${esc(at.band)}</b> · <span class="tag">${esc(at.category)}</span> · ${at.range_mhz[0].toFixed(3)}–${at.range_mhz[1].toFixed(3)} MHz`;
+      h+='<h4>What’s here</h4>'; if(at.description)h+=`<div class="kv">${esc(at.description)}</div>`;
       h+=`<div class="kv"><b>Decoders:</b> ${at.decoders.map(x=>`<span class="tag">${esc(x)}</span>`).join(' ')||'—'}</div>`;
       h+=`<div class="kv"><b>Detectors:</b> ${at.detectors.slice(0,4).map(esc).join(' · ')||'—'}</div>`;
     } else { $('#drwSub').textContent='Outside the curated band plan'; }
     h+='<h4>Likely signal</h4>';
-    if(cl.matches&&cl.matches.length){
-      h+=cl.matches.slice(0,5).map(m=>
-        `<div class="match"><span>${esc(m.name)} <span class="muted">${esc(m.category||'')}</span></span>`+
-        `<span>${m.likelihood}%</span></div><div class="bar" style="width:${Math.max(3,m.likelihood)}%"></div>`).join('');
+    if(cl.matches&&cl.matches.length){ h+=cl.matches.slice(0,5).map(m=>`<div class="match"><span>${esc(m.name)} <span class="muted">${esc(m.category||'')}</span></span><span>${m.likelihood}%</span></div><div class="bar" style="width:${Math.max(3,m.likelihood)}%"></div>`).join('');
     } else { h+='<div class="muted">No confident match from frequency alone.</div>'; }
-    const cmd=(at.found&&at.commands&&at.commands.length)?(at.commands[2]||at.commands[0])
-      :`rfhound classify ${freq.toFixed(3)}`;
-    h+='<h4>Suggested command</h4>';
-    h+=`<code class="cmd" id="drwCmd">${esc(cmd)}</code><button class="copybtn" id="drwCopy">copy</button>`;
+    const cmd=(at.found&&at.commands&&at.commands.length)?(at.commands[2]||at.commands[0]):`rfhound classify ${freq.toFixed(3)}`;
+    h+='<h4>Suggested command</h4>'+`<code class="cmd" id="drwCmd">${esc(cmd)}</code><button class="copybtn" id="drwCopy">copy</button>`;
     $('#drwBody').innerHTML=h;
-    const cp=$('#drwCopy'); if(cp) cp.onclick=()=>{
-      if(navigator.clipboard) navigator.clipboard.writeText(cmd); cp.textContent='copied ✓';};
-  }catch(e){ $('#drwBody').innerHTML=`<p class="alert">Error: ${esc(e.message)}</p>`; }
-}
-$('#drwClose').onclick=closeDrawer;
-$('#drawerScrim').onclick=closeDrawer;
+    const cp=$('#drwCopy'); if(cp)cp.onclick=()=>{if(navigator.clipboard)navigator.clipboard.writeText(cmd);cp.textContent='copied ✓';};
+  }catch(e){$('#drwBody').innerHTML=`<p class="alert">Error: ${esc(e.message)}</p>`;} }
+$('#drwClose').onclick=closeDrawer;$('#drawerScrim').onclick=closeDrawer;
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeDrawer();});
-$('#drwTune').onclick=()=>{ if(drawerFreq!=null){ closeDrawer(); tuneTo(drawerFreq); } };
-$('#drwBookmark').onclick=()=>{ if(drawerFreq!=null){ $('#bmFreq').value=drawerFreq.toFixed(3);
-  if(!$('#bmName').value) $('#bmName').value='peak '+drawerFreq.toFixed(3); closeDrawer();
-  document.getElementById('bookmarks').scrollIntoView({behavior:'smooth',block:'center'}); } };
+$('#drwTune').onclick=()=>{if(drawerFreq!=null){closeDrawer();tuneTo(drawerFreq);}};
+$('#drwBookmark').onclick=()=>{if(drawerFreq!=null){$('#bmFreq').value=drawerFreq.toFixed(3);if(!$('#bmName').value)$('#bmName').value='peak '+drawerFreq.toFixed(3);closeDrawer();document.getElementById('bookmarks').scrollIntoView({behavior:'smooth',block:'center'});}};
 
+// ---- wiring ----
 $('#sweepBtn').onclick=doSweep;$('#reconBtn').onclick=doRecon;
 $('#droneBtn').onclick=doDrone;$('#adsbBtn').onclick=doAdsb;$('#imsiBtn').onclick=doImsi;$('#hopBtn').onclick=doHop;
-async function doAt(){
-  const d=await api(`/api/at?freq=${$('#atFreq').value}`);
+async function doAt(){ const d=await api(`/api/at?freq=${$('#atFreq').value}`);
   if(!d.found){$('#atOut').innerHTML=`<span class="warn">${d.freq_mhz} MHz not in the band plan.</span>`;return;}
-  $('#atOut').innerHTML=`<b style="color:var(--accent)">${d.band}</b> `+
-    `<span class="tag">${d.category}</span> ${d.range_mhz[0].toFixed(3)}–${d.range_mhz[1].toFixed(3)} MHz`+
-    `<div style="margin-top:5px">Decoders: ${d.decoders.map(x=>`<span class="tag">${x}</span>`).join(' ')||'—'}</div>`+
-    `<div style="margin-top:4px">Detectors: ${d.detectors.slice(0,3).join(' · ')}</div>`+
-    `<div style="margin-top:4px">Try: <code>${d.commands[2]||d.commands[0]}</code></div>`;
-}
-$('#atBtn').onclick=doAt;
-$('#bandSearch').oninput=renderBands;
-$('#bmAddBtn').onclick=addBookmark;
-$('#bmFromCenter').onclick=bookmarkCenter;
+  $('#atOut').innerHTML=`<b style="color:var(--accent)">${esc(d.band)}</b> <span class="tag">${esc(d.category)}</span> ${d.range_mhz[0].toFixed(3)}–${d.range_mhz[1].toFixed(3)} MHz`+
+    `<div style="margin-top:5px">Decoders: ${d.decoders.map(x=>`<span class="tag">${esc(x)}</span>`).join(' ')||'—'}</div>`+
+    `<div style="margin-top:4px">Detectors: ${d.detectors.slice(0,3).map(esc).join(' · ')}</div>`+
+    `<div style="margin-top:4px">Try: <code>${esc(d.commands[2]||d.commands[0])}</code></div>`; }
+$('#atBtn').onclick=doAt;$('#bandSearch').oninput=renderBands;
+$('#bmAddBtn').onclick=addBookmark;$('#bmFromCenter').onclick=bookmarkCenter;
 $('#bmFreq').addEventListener('keydown',e=>{if(e.key==='Enter')addBookmark();});
 $('#bmNote').addEventListener('keydown',e=>{if(e.key==='Enter')addBookmark();});
+$('#capBtn').onclick=doCapture;$('#recRefresh').onclick=loadRecordings;
+$('#eobRefresh').onclick=loadEmitters;$('#sightRefresh').onclick=loadSightings;$('#expEobCsv').onclick=exportEob;
 $('#expPeaksCsv').onclick=()=>exportPeaks('csv');$('#expPeaksJson').onclick=()=>exportPeaks('json');
 $('#expReconCsv').onclick=()=>exportRecon('csv');$('#expReconJson').onclick=()=>exportRecon('json');
 $('#expBandsCsv').onclick=()=>exportBands('csv');$('#expBandsJson').onclick=()=>exportBands('json');
 $('#live').onchange=e=>setLive(e.target.checked);
 let autoTimer=null;$('#autoSweep').onchange=e=>{if(e.target.checked)autoTimer=setInterval(doSweep,1500);else clearInterval(autoTimer);};
-window.addEventListener('resize',drawWaterfall);
-initTheme();initWaterfallCtl();
-loadStatus().then(loadBands).then(loadBookmarks).then(doSweep).then(doRecon).then(refreshKpis).catch(e=>console.error(e));
+window.addEventListener('resize',()=>{drawWaterfall();if(lastSpec)drawSpectrum(lastSpec);});
+initTheme();initWaterfallCtl();initRx();
+loadStatus().then(loadBands).then(loadBookmarks).then(doSweep).then(doRecon)
+  .then(loadRecordings).then(loadEmitters).then(loadSightings).then(refreshKpis).catch(e=>console.error(e));
 </script>
 </body>
 </html>
