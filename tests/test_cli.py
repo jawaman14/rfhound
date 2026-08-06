@@ -71,6 +71,34 @@ def test_sweep_simulate(capsys):
     assert "Spectrum" in out
 
 
+def test_sweep_start_after_stop_rejected(capsys):
+    rc = run(["sweep", "440", "430", "--simulate"])
+    out = capsys.readouterr().out
+    assert rc == 2
+    assert "must be below" in out
+
+
+def test_sweep_out_of_range_rejected(capsys):
+    rc = run(["sweep", "-5", "10", "--simulate"])
+    out = capsys.readouterr().out
+    assert rc == 2
+    assert "outside the HackRF range" in out
+
+
+def test_classify_out_of_range_rejected(capsys):
+    rc = run(["classify", "-100"])
+    out = capsys.readouterr().out
+    assert rc == 2
+    assert "outside the HackRF range" in out
+
+
+def test_capture_nonpositive_seconds_rejected(capsys):
+    rc = run(["capture", "433", "-3", "--simulate"])
+    out = capsys.readouterr().out
+    assert rc == 2
+    assert "must be positive" in out
+
+
 def test_recon_simulate_with_report(tmp_path, capsys):
     report = tmp_path / "rep.md"
     rc = run(["recon", "--simulate", "--report", str(report)])

@@ -21,6 +21,10 @@ flake8-clean.
   catalogue, geolocation, GNSS spoof detection) and a captures/recordings entry.
 
 ### Fixed
+- **Input validation** — `sweep`, `capture`, and `classify` now reject
+  frequencies outside the HackRF's 1–6000 MHz range, reversed sweep ranges
+  (start ≥ stop), and non-positive capture lengths with a clear message and a
+  non-zero exit, instead of failing obscurely or accepting impossible input.
 - JSON output is written verbatim (via `console.raw`) instead of through the
   rich console, which soft-wrapped long values and produced invalid JSON.
 - Corrected the project Homepage/URLs to the standalone `jawaman14/rfhound`

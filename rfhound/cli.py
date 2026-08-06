@@ -30,6 +30,33 @@ from .modules import report as report_mod
 from .modules import sweep as sweep_mod
 
 
+# HackRF One tunes 1 MHz – 6 GHz. Reject requests outside that up front with a
+# clear message instead of letting them fail obscurely downstream.
+HACKRF_MIN_MHZ = 1.0
+HACKRF_MAX_MHZ = 6000.0
+
+
+def _valid_freq(freq_mhz: float) -> str | None:
+    """Return an error message if *freq_mhz* is outside the HackRF range, else None."""
+    if freq_mhz != freq_mhz:  # NaN
+        return "Frequency is not a number."
+    if freq_mhz < HACKRF_MIN_MHZ or freq_mhz > HACKRF_MAX_MHZ:
+        return (f"{freq_mhz:g} MHz is outside the HackRF range "
+                f"({HACKRF_MIN_MHZ:g}–{HACKRF_MAX_MHZ:g} MHz).")
+    return None
+
+
+def _valid_range(start_mhz: float, stop_mhz: float) -> str | None:
+    """Validate a [start, stop] sweep range; return an error message or None."""
+    for f in (start_mhz, stop_mhz):
+        err = _valid_freq(f)
+        if err:
+            return err
+    if start_mhz >= stop_mhz:
+        return (f"Start ({start_mhz:g} MHz) must be below stop ({stop_mhz:g} MHz).")
+    return None
+
+
 # --------------------------------------------------------------------------- #
 # Subcommand handlers
 # --------------------------------------------------------------------------- #
@@ -181,6 +208,10 @@ def cmd_classify(args: argparse.Namespace, cfg: Config) -> int:
     if freq is None:
         console.error("Provide a frequency (MHz) or --file with a capture that has metadata.")
         return 1
+    err = _valid_freq(freq)
+    if err:
+        console.error(err)
+        return 2
     matches = classify_mod.classify(freq, bandwidth_khz=bw, modulation=mod)
     if args.json:
         import json
@@ -270,6 +301,10 @@ def cmd_tune(args: argparse.Namespace, cfg: Config) -> int:
 
 
 def cmd_sweep(args: argparse.Namespace, cfg: Config) -> int:
+    err = _valid_range(args.start, args.stop)
+    if err:
+        console.error(err)
+        return 2
     if getattr(args, "watch", False):
         return _sweep_watch(args, cfg)
     with console.status(f"Sweeping {args.start}-{args.stop} MHz…"):
@@ -374,6 +409,13 @@ def cmd_recon(args: argparse.Namespace, cfg: Config) -> int:
 
 
 def cmd_capture(args: argparse.Namespace, cfg: Config) -> int:
+    err = _valid_freq(args.freq)
+    if err:
+        console.error(err)
+        return 2
+    if args.seconds <= 0:
+        console.error("Capture length (seconds) must be positive.")
+        return 2
     cap = capture_mod.capture_iq(
         cfg,
         args.freq,
