@@ -243,12 +243,18 @@ Shipped in this push:
 7. ✅ **Docker + systemd** packaging (`Dockerfile`, `docker-compose.yml`,
    hardened units in `deploy/`) for unattended sensor nodes. *(PyPI publish TBD.)*
 
+Also shipped in this push:
+- ✅ **Jamming characterisation from IQ** (`sigint jamming --file`) — swept/chirp,
+  pulsed, barrage & spot/CW from a capture's spectrogram.
+- ✅ **Correlated RollJam detector** (`defense rolljam-check`) — jam + fob press
+  fused on a timeline.
+- ✅ **Live decode → EOB** (`decode run --eob`) + the existing `--track` sightings
+  wiring.
+
 Still open (next):
-- **Jamming characterisation from IQ** — swept/chirp & pulsed jammer detection
-  from a capture (fuse hop + pulse analysers).
-- **Correlated RollJam detector** — fuse `defense monitor` (jam) + a fob press.
-- **Live decode → EOB/sightings** wiring in real time.
-- **PyPI publish**; PDF reports; KML (alongside GeoJSON).
+- **PyPI publish** (needs maintainer credentials).
+- **PDF situational-awareness reports**; **KML** alongside GeoJSON.
+- ML modulation classifier (plugin extra); AoA/DF; deeper URH handoff.
 
 ---
 
