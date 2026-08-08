@@ -1511,35 +1511,58 @@ def cmd_config(args: argparse.Namespace, cfg: Config) -> int:
     return 0
 
 
-def cmd_wifi(args: argparse.Namespace, cfg: Config) -> int:
+def _wifi_scan_or_sim(args, cfg):
     from .modules import wifi
-    import json
     sim = args.simulate or cfg.simulate_mode
     if sim:
-        aps = wifi.simulate_wifi()
-    else:
-        ok, note = wifi.available()
-        if not ok:
-            console.error(note)
-            return 2
-        try:
-            aps = wifi.scan_wifi(iface=args.iface)
-        except RuntimeError as exc:
-            console.error(f"Wi-Fi scan failed: {exc}")
-            return 2
+        return wifi.simulate_wifi(), sim, None
+    ok, note = wifi.available()
+    if not ok:
+        return None, sim, note
+    try:
+        return wifi.scan_wifi(iface=getattr(args, "iface", None)), sim, None
+    except RuntimeError as exc:
+        return None, sim, str(exc)
+
+
+def cmd_wifi(args: argparse.Namespace, cfg: Config) -> int:
+    from .modules import wifi, oui
+    import json
+    aps, sim, err = _wifi_scan_or_sim(args, cfg)
+    if aps is None:
+        console.error(f"Wi-Fi unavailable: {err}")
+        return 2
+
+    if args.wifi_cmd == "channels":
+        reports = wifi.channel_report(aps)
+        if args.json:
+            console.raw(json.dumps([{"band": r.band, "per_channel": r.per_channel,
+                                     "busiest": r.busiest, "recommended": r.recommended}
+                                    for r in reports], indent=2))
+            return 0
+        console.rule("Wi-Fi channel occupancy" + (" · SIMULATED" if sim else ""))
+        for r in reports:
+            occ = ", ".join(f"ch{c}:{n}" for c, n in r.per_channel.items())
+            console.print_(f"[bold]{r.band}[/bold]  {occ}" if console.have_rich()
+                           else f"{r.band}  {occ}")
+            console.success(f"  recommended (least congested): "
+                            f"{', '.join(map(str, r.recommended))}  ·  {r.detail}")
+        return 0
+
     findings = wifi.analyze_wifi(aps) if args.analyze else []
     if args.json:
         console.raw(json.dumps({
             "aps": [{"bssid": a.bssid, "ssid": a.ssid, "rssi_dbm": a.rssi_dbm,
-                     "channel": a.channel, "band": a.band, "security": a.security} for a in aps],
+                     "channel": a.channel, "band": a.band, "security": a.security,
+                     "vendor": oui.lookup(a.bssid)} for a in aps],
             "findings": [{"indicator": f.indicator, "detail": f.detail,
                           "severity": f.severity} for f in findings]}, indent=2))
         return 0
     console.rule("Wi-Fi scan (passive)" + (" · SIMULATED" if sim else ""))
-    rows = [[a.ssid or "(hidden)", a.bssid, f"{a.rssi_dbm:.0f}", a.band,
-             str(a.channel or "—"), a.security] for a in aps]
+    rows = [[a.ssid or "(hidden)", a.bssid, oui.lookup(a.bssid) or "—", f"{a.rssi_dbm:.0f}",
+             a.band, str(a.channel or "—"), a.security] for a in aps]
     console.table(f"Access points ({len(aps)})",
-                  ["SSID", "BSSID", "dBm", "Band", "Ch", "Security"], rows)
+                  ["SSID", "BSSID", "Vendor", "dBm", "Band", "Ch", "Security"], rows)
     if args.analyze:
         if not findings:
             console.success("No rogue-AP / evil-twin / open-network findings.")
@@ -1565,17 +1588,20 @@ def cmd_ble(args: argparse.Namespace, cfg: Config) -> int:
         except RuntimeError as exc:
             console.error(f"BLE scan failed: {exc}")
             return 2
+    from .modules import oui
     findings = ble.analyze_ble(devices) if args.analyze else []
     if args.json:
         console.raw(json.dumps({
             "devices": [{"addr": d.addr, "name": d.name, "rssi_dbm": d.rssi_dbm,
-                         "kind": d.kind} for d in devices],
+                         "kind": d.kind, "vendor": oui.lookup(d.addr)} for d in devices],
             "findings": [{"indicator": f.indicator, "detail": f.detail,
                           "severity": f.severity} for f in findings]}, indent=2))
         return 0
     console.rule("Bluetooth LE scan (passive)" + (" · SIMULATED" if sim else ""))
-    rows = [[d.name or "(unknown)", d.addr, f"{d.rssi_dbm:.0f}", d.kind or "—"] for d in devices]
-    console.table(f"BLE devices ({len(devices)})", ["Name", "Address", "dBm", "Flags"], rows)
+    rows = [[d.name or "(unknown)", d.addr, oui.lookup(d.addr) or "—",
+             f"{d.rssi_dbm:.0f}", d.kind or "—"] for d in devices]
+    console.table(f"BLE devices ({len(devices)})",
+                  ["Name", "Address", "Vendor", "dBm", "Flags"], rows)
     if args.analyze:
         if not findings:
             console.success("No tracker / persistent-device findings.")
@@ -1586,13 +1612,45 @@ def cmd_ble(args: argparse.Namespace, cfg: Config) -> int:
 
 
 def cmd_sources(args: argparse.Namespace, cfg: Config) -> int:
-    """List the passive RF sources available on this host (HackRF + Wi-Fi + BLE)."""
+    """List — or scan across — the passive RF sources (HackRF + Wi-Fi + BLE)."""
     from .modules import wifi
     from .modules import bluetooth as ble
-    console.rule("RF sources")
     hackrf = device.is_present()
     wok, wnote = wifi.available()
     bok, bnote = ble.available()
+
+    if getattr(args, "scan", False):
+        sim = args.simulate or cfg.simulate_mode
+        console.rule("Combined source scan" + (" · SIMULATED" if sim else ""))
+        # HackRF spectrum survey.
+        rep = recon_mod.run_recon(cfg, simulate=(sim or not hackrf), progress=False)
+        console.info(f"HackRF: {len(rep.active_findings)}/{len(rep.findings)} bands active"
+                     + (" (sim)" if sim or not hackrf else ""))
+        # Wi-Fi.
+        if wok or sim:
+            aps = wifi.simulate_wifi() if (sim or not wok) else wifi.scan_wifi()
+            wf = wifi.analyze_wifi(aps)
+            console.info(f"Wi-Fi: {len(aps)} APs"
+                         + (f", {len(wf)} finding(s)" if wf else ""))
+            for f in wf:
+                if f.severity == "high":
+                    console.error(f"  [wifi/{f.severity}] {f.indicator}: {f.detail}")
+        else:
+            console.warn(f"Wi-Fi: {wnote}")
+        # BLE.
+        if bok or sim:
+            devs = ble.simulate_ble() if (sim or not bok) else ble.scan_ble()
+            bf = ble.analyze_ble(devs)
+            console.info(f"BLE: {len(devs)} devices"
+                         + (f", {len(bf)} finding(s)" if bf else ""))
+            for f in bf:
+                if f.severity == "high":
+                    console.error(f"  [ble/{f.severity}] {f.indicator}: {f.detail}")
+        else:
+            console.warn(f"BLE: {bnote}")
+        return 0
+
+    console.rule("RF sources")
     rows = [
         ["HackRF (1 MHz–6 GHz)", "yes" if hackrf else "no",
          "sweep / capture / decode" if hackrf else "not detected (use --simulate)"],
@@ -1601,10 +1659,8 @@ def cmd_sources(args: argparse.Namespace, cfg: Config) -> int:
         ["Bluetooth LE", "yes" if bok else "no", f"via {bnote}" if bok else bnote],
     ]
     console.table("Passive sources", ["Source", "Available", "Notes"], rows)
-    console.print_("Scan them: rfhound wifi scan --analyze · rfhound ble scan --analyze · "
-                   "rfhound recon")
-    console.print_("Locate by RSSI: rfhound hunt --source wifi --target <SSID/BSSID> · "
-                   "rfhound sigint locate --file reports.json")
+    console.print_("Scan all at once: rfhound sources --scan   (add --simulate to demo)")
+    console.print_("Locate by RSSI: rfhound hunt --source wifi --target <SSID/BSSID>")
     return 0
 
 
@@ -2002,7 +2058,7 @@ def build_parser() -> argparse.ArgumentParser:
     auadd = ausub.add_parser("add", help="Define an automation")
     auadd.add_argument("name")
     auadd.add_argument("task", choices=["recon", "monitor", "drone", "imsi", "hop", "sweep",
-                                        "gnss", "emitters"])
+                                        "gnss", "emitters", "wifi", "ble"])
     auadd.add_argument("--interval", type=int, default=60, help="Run every N seconds")
     auadd.add_argument("--start", type=float, help="Start MHz (monitor/sweep/emitters)")
     auadd.add_argument("--stop", type=float, help="Stop MHz (monitor/sweep/emitters)")
@@ -2065,8 +2121,10 @@ def build_parser() -> argparse.ArgumentParser:
     msub.add_parser("sample", help="Write a sample mod to the mods directory")
     pm.set_defaults(func=cmd_mods, mods_cmd="list", dir=None)
 
-    psrc = sub.add_parser("sources", help="List passive RF sources (HackRF + Wi-Fi + BLE)")
-    psrc.set_defaults(func=cmd_sources)
+    psrc = sub.add_parser("sources", help="List (or --scan) passive RF sources: HackRF + Wi-Fi + BLE")
+    psrc.add_argument("--scan", action="store_true", help="Scan all available sources at once")
+    psrc.add_argument("--simulate", action="store_true")
+    psrc.set_defaults(func=cmd_sources, scan=False, simulate=False)
 
     pwifi = sub.add_parser("wifi", help="Passive Wi-Fi AP scan (host adapter) with RSSI")
     wsub = pwifi.add_subparsers(dest="wifi_cmd")
@@ -2076,6 +2134,10 @@ def build_parser() -> argparse.ArgumentParser:
                        help="Flag evil-twin / open / rogue APs")
     wscan.add_argument("--json", action="store_true", help="Machine-readable output")
     wscan.add_argument("--simulate", action="store_true")
+    wchan = wsub.add_parser("channels", help="Channel occupancy + least-congested recommendation")
+    wchan.add_argument("--iface", help="Wi-Fi interface")
+    wchan.add_argument("--json", action="store_true", help="Machine-readable output")
+    wchan.add_argument("--simulate", action="store_true")
     pwifi.set_defaults(func=cmd_wifi, wifi_cmd="scan", iface=None, analyze=False,
                        json=False, simulate=False)
 

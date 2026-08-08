@@ -26,7 +26,8 @@ from . import sweep as sweep_mod
 from .defense import monitor_interference
 
 
-TASKS = ("recon", "monitor", "drone", "imsi", "hop", "sweep", "gnss", "emitters")
+TASKS = ("recon", "monitor", "drone", "imsi", "hop", "sweep", "gnss", "emitters",
+         "wifi", "ble")
 ALERT_MODES = ("threat", "always", "change")
 
 
@@ -160,10 +161,56 @@ def _task_emitters(cfg, params, simulate, prev) -> AutoResult:
                       {"emitters": sorted(now_freqs), "new": new})
 
 
+def _task_wifi(cfg, params, simulate, prev) -> AutoResult:
+    """Watch Wi-Fi APs; alert on evil-twin or a new/rogue AP vs last scan."""
+    from . import wifi
+    if simulate:
+        aps = wifi.simulate_wifi()
+    else:
+        ok, note = wifi.available()
+        if not ok:
+            return AutoResult(False, f"wifi: {note}", {})
+        try:
+            aps = wifi.scan_wifi(iface=params.get("iface"))
+        except Exception as exc:  # noqa: BLE001
+            return AutoResult(False, f"wifi scan error: {exc}", {})
+    baseline = set(prev) if prev else None
+    findings = wifi.analyze_wifi(aps, baseline_bssids=baseline)
+    kinds = sorted({f.indicator for f in findings})
+    alert = any(f.severity == "high" for f in findings) or any(
+        f.indicator == "new-ap" for f in findings)
+    return AutoResult(alert, f"{len(aps)} APs"
+                      + (f"; {', '.join(kinds)}" if kinds else ""),
+                      {"seen": [a.bssid for a in aps], "findings": kinds})
+
+
+def _task_ble(cfg, params, simulate, prev) -> AutoResult:
+    """Watch BLE devices; alert on trackers or a device persisting near you."""
+    from . import bluetooth as ble
+    if simulate:
+        devices = ble.simulate_ble()
+    else:
+        ok, note = ble.available()
+        if not ok:
+            return AutoResult(False, f"ble: {note}", {})
+        try:
+            devices = ble.scan_ble(seconds=int(params.get("seconds", 8)))
+        except Exception as exc:  # noqa: BLE001
+            return AutoResult(False, f"ble scan error: {exc}", {})
+    seen_before = set(prev) if prev else None
+    findings = ble.analyze_ble(devices, seen_before=seen_before)
+    kinds = sorted({f.indicator for f in findings})
+    alert = any(f.indicator in ("tracker", "persistent") for f in findings)
+    return AutoResult(alert, f"{len(devices)} devices"
+                      + (f"; {', '.join(kinds)}" if kinds else ""),
+                      {"seen": [d.addr for d in devices], "findings": kinds})
+
+
 _RUNNERS = {
     "recon": _task_recon, "monitor": _task_monitor, "drone": _task_drone,
     "imsi": _task_imsi, "hop": _task_hop, "sweep": _task_sweep,
     "gnss": _task_gnss, "emitters": _task_emitters,
+    "wifi": _task_wifi, "ble": _task_ble,
 }
 
 
@@ -263,7 +310,8 @@ def run_due(cfg: Config, *, simulate: bool, state: dict, now: float | None = Non
             alerting = False
         events.append(fire(cfg, auto, result, alerting=alerting))
         # Update change-detection + alert-cooldown state.
-        prev_key = result.data.get("active") or result.data.get("peaks") or prev
+        prev_key = (result.data.get("active") or result.data.get("peaks")
+                    or result.data.get("seen") or prev)
         state[a["name"]] = {"last_run": now, "prev": prev_key,
                             "last_alert": now if alerting else last_alert}
     return events

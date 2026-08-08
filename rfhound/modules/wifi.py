@@ -171,6 +171,44 @@ def analyze_wifi(aps: list, *, baseline_bssids: set | None = None) -> list:
     return findings
 
 
+@dataclass
+class ChannelReport:
+    band: str
+    per_channel: dict          # channel -> AP count
+    busiest: int | None
+    recommended: list          # least-congested non-overlapping channels
+    detail: str
+
+
+def channel_report(aps: list) -> list:
+    """Per-band channel occupancy + a least-congested recommendation.
+
+    2.4 GHz recommends among the non-overlapping 1/6/11; 5 GHz counts per channel.
+    """
+    reports = []
+    for band, chans in (("2.4GHz", [1, 6, 11]), ("5GHz", None)):
+        counts: dict = {}
+        for a in aps:
+            if a.band != band or a.channel is None:
+                continue
+            counts[a.channel] = counts.get(a.channel, 0) + 1
+        if not counts:
+            continue
+        busiest = max(counts, key=counts.get)
+        if chans:  # 2.4 GHz: score the three non-overlapping channels
+            overlap = {1: (1, 2, 3), 6: (5, 6, 7), 11: (10, 11, 12, 13)}
+            load = {c: sum(counts.get(ch, 0) for ch in overlap[c]) for c in chans}
+            recommended = sorted(load, key=load.get)
+            detail = "2.4 GHz is crowded — use 1/6/11; " + \
+                     ", ".join(f"ch{c}:{load[c]}" for c in chans)
+        else:
+            recommended = sorted(counts, key=counts.get)[:3]
+            detail = f"{len(counts)} 5 GHz channels in use"
+        reports.append(ChannelReport(band, dict(sorted(counts.items())), busiest,
+                                     recommended, detail))
+    return reports
+
+
 def simulate_wifi() -> list:
     """A synthetic scan incl. an evil-twin pair and an open network."""
     return [

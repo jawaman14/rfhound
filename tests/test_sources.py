@@ -1,4 +1,26 @@
-from rfhound.modules import wifi, bluetooth as ble, rssi, sigint
+from rfhound.modules import wifi, bluetooth as ble, rssi, sigint, oui
+
+
+# --- OUI vendor lookup ---
+def test_oui_known_vendor():
+    assert oui.lookup("B8:27:EB:11:22:33") == "Raspberry Pi"
+    assert oui.lookup("246F28aabbcc") == "Espressif (ESP32)"
+
+
+def test_oui_locally_administered():
+    # 0x02 bit set in the first octet => randomized/private.
+    assert oui.is_locally_administered("aa:bb:cc:00:00:01") is True
+    assert oui.lookup("aa:bb:cc:00:00:01") == "random/private"
+    assert oui.lookup("zz") == ""
+
+
+# --- Wi-Fi channel report ---
+def test_wifi_channel_report():
+    reports = wifi.channel_report(wifi.simulate_wifi())
+    bands = {r.band for r in reports}
+    assert "2.4GHz" in bands
+    r24 = [r for r in reports if r.band == "2.4GHz"][0]
+    assert set(r24.recommended) <= {1, 6, 11}
 
 
 # --- Wi-Fi ---

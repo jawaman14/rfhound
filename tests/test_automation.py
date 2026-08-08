@@ -24,6 +24,23 @@ def test_run_task_all_types_simulate(tmp_path, monkeypatch):
         assert res.summary
 
 
+def test_wifi_task_alerts_on_evil_twin():
+    cfg = Config()
+    a = {"name": "w", "task": "wifi", "alert_on": "threat"}
+    res = auto.run_task(cfg, a, simulate=True)
+    assert res.alert is True
+    assert "evil-twin?" in res.data["findings"]
+    assert res.data["seen"]      # bssids captured for change-detection
+
+
+def test_ble_task_alerts_on_tracker():
+    cfg = Config()
+    a = {"name": "b", "task": "ble", "alert_on": "threat"}
+    res = auto.run_task(cfg, a, simulate=True)
+    assert res.alert is True
+    assert "tracker" in res.data["findings"]
+
+
 def test_gnss_task_alerts_on_spoofing():
     cfg = Config()
     a = {"name": "g", "task": "gnss",
