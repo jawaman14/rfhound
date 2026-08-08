@@ -190,6 +190,90 @@ def recordings_dict(cfg: Config) -> dict:
          "decoder": r.decoder} for r in recs]}
 
 
+def wifi_dict(*, simulate: bool) -> dict:
+    from ..modules import wifi, oui
+    if simulate:
+        aps = wifi.simulate_wifi()
+    else:
+        ok, note = wifi.available()
+        if not ok:
+            return {"available": False, "note": note, "aps": [], "findings": []}
+        try:
+            aps = wifi.scan_wifi()
+        except Exception as exc:  # noqa: BLE001
+            return {"available": True, "error": str(exc), "aps": [], "findings": []}
+    findings = wifi.analyze_wifi(aps)
+    return {"available": True, "simulated": simulate,
+            "aps": [{"bssid": a.bssid, "ssid": a.ssid, "rssi_dbm": a.rssi_dbm,
+                     "channel": a.channel, "band": a.band, "security": a.security,
+                     "vendor": oui.lookup(a.bssid)} for a in aps],
+            "findings": [{"indicator": f.indicator, "detail": f.detail,
+                          "severity": f.severity} for f in findings]}
+
+
+def ble_dict(*, simulate: bool) -> dict:
+    from ..modules import bluetooth as ble
+    from ..modules import oui
+    if simulate:
+        devices = ble.simulate_ble()
+    else:
+        ok, note = ble.available()
+        if not ok:
+            return {"available": False, "note": note, "devices": [], "findings": []}
+        try:
+            devices = ble.scan_ble()
+        except Exception as exc:  # noqa: BLE001
+            return {"available": True, "error": str(exc), "devices": [], "findings": []}
+    findings = ble.analyze_ble(devices)
+    return {"available": True, "simulated": simulate,
+            "devices": [{"addr": d.addr, "name": d.name, "rssi_dbm": d.rssi_dbm,
+                         "kind": d.kind, "vendor": oui.lookup(d.addr)} for d in devices],
+            "findings": [{"indicator": f.indicator, "detail": f.detail,
+                          "severity": f.severity} for f in findings]}
+
+
+def sources_dict(cfg: Config) -> dict:
+    from ..modules import wifi
+    from ..modules import bluetooth as ble
+    wok, wnote = wifi.available()
+    bok, bnote = ble.available()
+    return {"hackrf": device.is_present(),
+            "wifi": {"available": wok, "note": wnote},
+            "ble": {"available": bok, "note": bnote}}
+
+
+def hunt_dict(cfg: Config, source: str, target: str, *, simulate: bool) -> dict:
+    from ..modules import rssi as rssi_mod
+    t = (target or "").lower()
+    rssi_val = None
+    if source == "wifi":
+        from ..modules import wifi
+        aps = wifi.simulate_wifi() if simulate else wifi.scan_wifi()
+        for a in aps:
+            if t and (t in a.bssid or t in a.ssid.lower()):
+                rssi_val = a.rssi_dbm
+                break
+    elif source == "ble":
+        from ..modules import bluetooth as ble
+        devs = ble.simulate_ble() if simulate else ble.scan_ble()
+        for d in devs:
+            if t and (t in d.addr or t in (d.name or "").lower()):
+                rssi_val = d.rssi_dbm
+                break
+    else:  # hackrf: sweep-peak power near a target frequency
+        try:
+            f = float(target)
+            result = sweep_mod.sweep(cfg, f - 1, f + 1, simulate=simulate)
+            rssi_val = max((b.power_db for b in result.bins), default=None)
+        except (ValueError, RuntimeError):
+            rssi_val = None
+    if rssi_val is None:
+        return {"found": False, "source": source, "target": target}
+    return {"found": True, "source": source, "target": target,
+            "rssi_dbm": round(rssi_val, 1),
+            "distance_m": rssi_mod.estimate_distance_m(rssi_val)}
+
+
 def emitters_dict() -> dict:
     from ..modules import sigint as sigint_mod
     cat = sigint_mod.EmitterCatalog()
@@ -376,6 +460,16 @@ def _make_handler(state: AppState):
                     return self._send_json(recordings_dict(cfg))
                 if path == "/api/emitters":
                     return self._send_json(emitters_dict())
+                if path == "/api/sources":
+                    return self._send_json(sources_dict(cfg))
+                if path == "/api/wifi":
+                    return self._send_json(wifi_dict(simulate=sim))
+                if path == "/api/ble":
+                    return self._send_json(ble_dict(simulate=sim))
+                if path == "/api/hunt":
+                    return self._send_json(hunt_dict(
+                        cfg, qs.get("source", ["wifi"])[0], qs.get("target", [""])[0],
+                        simulate=sim))
                 if path == "/api/sightings":
                     from ..modules import sightings as sightings_mod
                     store = sightings_mod.SightingsStore()

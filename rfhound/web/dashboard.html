@@ -170,6 +170,9 @@
       <a href="#recordings">💾 Recordings</a>
       <a href="#emitters">📇 Emitters (EOB)</a>
       <a href="#sightings">🔎 Sightings</a>
+      <a href="#wifi">📶 Wi-Fi</a>
+      <a href="#ble">🔵 Bluetooth</a>
+      <a href="#foxhunt">🎯 Foxhunt</a>
       <a href="#bands">📚 Knowledge base</a>
       <a href="#system">⚙️ System</a>
     </nav>
@@ -301,6 +304,40 @@
       <div class="card section" id="sightings">
         <h2>Sightings — decoded IDs <span class="exp"><button id="sightRefresh">⟳</button></span></h2>
         <div class="scroll"><table id="sightTbl"><thead><tr><th>Kind</th><th>ID</th><th>Count</th><th>Freq</th></tr></thead><tbody></tbody></table></div>
+      </div>
+
+      <!-- Wi-Fi -->
+      <div class="card section" id="wifi">
+        <h2>Wi-Fi access points <span class="exp"><button id="wifiRefresh">⟳</button></span></h2>
+        <div class="scroll"><table id="wifiTbl"><thead><tr><th>SSID</th><th>BSSID</th><th>Vendor</th><th>dBm</th><th>Band</th><th>Ch</th><th>Sec</th></tr></thead><tbody></tbody></table></div>
+        <div id="wifiFindings" class="muted" style="margin-top:6px"></div>
+      </div>
+
+      <!-- Bluetooth -->
+      <div class="card section" id="ble">
+        <h2>Bluetooth LE devices <span class="exp"><button id="bleRefresh">⟳</button></span></h2>
+        <div class="scroll"><table id="bleTbl"><thead><tr><th>Name</th><th>Address</th><th>Vendor</th><th>dBm</th><th>Flags</th></tr></thead><tbody></tbody></table></div>
+        <div id="bleFindings" class="muted" style="margin-top:6px"></div>
+      </div>
+
+      <!-- Foxhunt (RSSI locate) -->
+      <div class="card section" id="foxhunt">
+        <h2>Foxhunt — locate by RSSI</h2>
+        <div class="row">
+          <label>Source</label>
+          <select id="huntSource" style="background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:7px;padding:6px 8px">
+            <option value="wifi">Wi-Fi</option><option value="ble">BLE</option><option value="hackrf">HackRF (MHz)</option>
+          </select>
+          <input type="text" id="huntTarget" placeholder="SSID / addr / MHz" value="HomeNet">
+          <button id="huntBtn">Start</button>
+          <span class="muted" id="huntInfo"></span>
+        </div>
+        <div class="smeter" title="Target RSSI — walk toward stronger (hotter)">
+          <span class="smeter-label">RSSI</span>
+          <div class="smeter-track"><div class="smeter-fill" id="huntFill"></div><div class="smeter-peak" id="huntPeak"></div></div>
+          <span class="smeter-val" id="huntVal">—</span>
+        </div>
+        <div class="muted" id="huntTrend" style="text-align:center;font-weight:700"></div>
       </div>
 
       <!-- Bookmarks -->
@@ -564,6 +601,55 @@ async function loadSightings(){ const d=await api('/api/sightings'),tb=$('#sight
   d.sightings.forEach(s=>tb.insertAdjacentHTML('beforeend',
     `<tr><td>${esc(s.kind)}</td><td>${esc(s.id)}</td><td>${s.count}</td><td>${s.freq_mhz?(+s.freq_mhz).toFixed(3):'—'}</td></tr>`)); }
 
+// ---- Wi-Fi / BLE panels ----
+function findingsHtml(list, cleanMsg){
+  return list.length ? list.map(f=>`<div>• <span class="sev-${f.severity}">[${esc(f.severity)}]</span> ${esc(f.indicator)}: ${esc(f.detail)}</div>`).join('')
+                     : `<span class="clean">${cleanMsg}</span>`;
+}
+async function loadWifi(){ try{
+  const d=await api(`/api/wifi?simulate=${sim()}`), tb=$('#wifiTbl tbody'); tb.innerHTML='';
+  if(!d.available){ tb.innerHTML='<tr><td colspan=7 class=muted>No Wi-Fi adapter — enable Simulate.</td></tr>';
+    $('#wifiFindings').innerHTML=`<span class="muted">${esc(d.note||'')}</span>`; return; }
+  d.aps.forEach(a=>tb.insertAdjacentHTML('beforeend',
+    `<tr style="cursor:pointer" data-t="${esc(a.ssid||a.bssid)}"><td>${esc(a.ssid||'(hidden)')}</td><td>${esc(a.bssid)}</td><td class=muted>${esc(a.vendor||'—')}</td><td>${a.rssi_dbm.toFixed(0)}</td><td>${esc(a.band)}</td><td>${a.channel||'—'}</td><td>${esc(a.security)}</td></tr>`));
+  tb.querySelectorAll('tr[data-t]').forEach(tr=>tr.onclick=()=>huntSetTarget('wifi',tr.dataset.t));
+  $('#wifiFindings').innerHTML=findingsHtml(d.findings,'No rogue-AP / evil-twin findings.');
+}catch(e){console.error(e);} }
+async function loadBle(){ try{
+  const d=await api(`/api/ble?simulate=${sim()}`), tb=$('#bleTbl tbody'); tb.innerHTML='';
+  if(!d.available){ tb.innerHTML='<tr><td colspan=5 class=muted>No Bluetooth adapter — enable Simulate.</td></tr>';
+    $('#bleFindings').innerHTML=`<span class="muted">${esc(d.note||'')}</span>`; return; }
+  d.devices.forEach(x=>tb.insertAdjacentHTML('beforeend',
+    `<tr style="cursor:pointer" data-t="${esc(x.name||x.addr)}"><td>${esc(x.name||'(unknown)')}</td><td>${esc(x.addr)}</td><td class=muted>${esc(x.vendor||'—')}</td><td>${x.rssi_dbm.toFixed(0)}</td><td>${x.kind?`<span class="sev-high">${esc(x.kind)}</span>`:'—'}</td></tr>`));
+  tb.querySelectorAll('tr[data-t]').forEach(tr=>tr.onclick=()=>huntSetTarget('ble',tr.dataset.t));
+  $('#bleFindings').innerHTML=findingsHtml(d.findings,'No tracker findings.');
+}catch(e){console.error(e);} }
+
+// ---- foxhunt (RSSI locate) ----
+let huntTimer=null, huntSeries=[], huntPeakDbm=-120;
+function huntPct(dbm){ return Math.max(2,Math.min(100,(dbm+90)/60*100)); }
+function huntSetTarget(src,t){ $('#huntSource').value=src; $('#huntTarget').value=t;
+  document.getElementById('foxhunt').scrollIntoView({behavior:'smooth',block:'center'}); }
+async function huntOnce(){
+  try{ const src=$('#huntSource').value, tgt=$('#huntTarget').value;
+    const d=await api(`/api/hunt?source=${encodeURIComponent(src)}&target=${encodeURIComponent(tgt)}&simulate=${sim()}`);
+    if(!d.found){ $('#huntInfo').textContent='target not seen this round'; return; }
+    huntSeries.push(d.rssi_dbm);
+    const pct=huntPct(d.rssi_dbm), col=d.rssi_dbm>-50?'var(--ok)':d.rssi_dbm>-70?'var(--warn)':'var(--bad)';
+    $('#huntFill').style.width=pct+'%'; $('#huntFill').style.background=col;
+    if(d.rssi_dbm>huntPeakDbm) huntPeakDbm=d.rssi_dbm;
+    $('#huntPeak').style.left='calc('+huntPct(huntPeakDbm)+'% - 1px)';
+    $('#huntVal').textContent=d.rssi_dbm.toFixed(0)+' dBm · ~'+d.distance_m+' m';
+    let trend='· steady'; if(huntSeries.length>=2){ const prev=huntSeries[huntSeries.length-2];
+      trend = d.rssi_dbm-prev>=2?'↑ WARMER — closer':prev-d.rssi_dbm>=2?'↓ colder — farther':'· steady'; }
+    $('#huntTrend').textContent=trend; $('#huntTrend').style.color=trend[0]==='↑'?'var(--ok)':trend[0]==='↓'?'var(--bad)':'var(--dim)';
+    $('#huntInfo').textContent=huntSeries.length+' samples';
+  }catch(e){ $('#huntInfo').textContent='error: '+e.message; }
+}
+function toggleHunt(){ const btn=$('#huntBtn');
+  if(huntTimer){ clearInterval(huntTimer); huntTimer=null; btn.textContent='Start'; return; }
+  huntSeries=[]; huntPeakDbm=-120; btn.textContent='Stop'; huntOnce(); huntTimer=setInterval(huntOnce,2000); }
+
 // ---- export ----
 let lastSweep=null,lastRecon=null;
 function download(name,text,mime){const b=new Blob([text],{type:mime}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);}
@@ -640,6 +726,7 @@ $('#bmFreq').addEventListener('keydown',e=>{if(e.key==='Enter')addBookmark();});
 $('#bmNote').addEventListener('keydown',e=>{if(e.key==='Enter')addBookmark();});
 $('#capBtn').onclick=doCapture;$('#recRefresh').onclick=loadRecordings;
 $('#eobRefresh').onclick=loadEmitters;$('#sightRefresh').onclick=loadSightings;$('#expEobCsv').onclick=exportEob;
+$('#wifiRefresh').onclick=loadWifi;$('#bleRefresh').onclick=loadBle;$('#huntBtn').onclick=toggleHunt;
 $('#expPeaksCsv').onclick=()=>exportPeaks('csv');$('#expPeaksJson').onclick=()=>exportPeaks('json');
 $('#expReconCsv').onclick=()=>exportRecon('csv');$('#expReconJson').onclick=()=>exportRecon('json');
 $('#expBandsCsv').onclick=()=>exportBands('csv');$('#expBandsJson').onclick=()=>exportBands('json');
@@ -648,7 +735,8 @@ let autoTimer=null;$('#autoSweep').onchange=e=>{if(e.target.checked)autoTimer=se
 window.addEventListener('resize',()=>{drawWaterfall();if(lastSpec)drawSpectrum(lastSpec);});
 initTheme();initWaterfallCtl();initRx();
 loadStatus().then(loadBands).then(loadBookmarks).then(doSweep).then(doRecon)
-  .then(loadRecordings).then(loadEmitters).then(loadSightings).then(refreshKpis).catch(e=>console.error(e));
+  .then(loadRecordings).then(loadEmitters).then(loadSightings)
+  .then(loadWifi).then(loadBle).then(refreshKpis).catch(e=>console.error(e));
 </script>
 </body>
 </html>

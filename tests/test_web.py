@@ -301,6 +301,42 @@ def test_emitters_endpoint(base_url):
     assert code == 200 and "emitters" in data
 
 
+def test_sources_endpoint(base_url):
+    code, data = get(base_url + "/api/sources")
+    assert code == 200
+    assert "hackrf" in data and "wifi" in data and "ble" in data
+
+
+def test_wifi_endpoint_simulated(base_url):
+    code, data = get(base_url + "/api/wifi?simulate=1")
+    assert code == 200 and data["available"]
+    assert len(data["aps"]) == 4
+    assert any(f["indicator"] == "evil-twin?" for f in data["findings"])
+    assert "vendor" in data["aps"][0]
+
+
+def test_ble_endpoint_simulated(base_url):
+    code, data = get(base_url + "/api/ble?simulate=1")
+    assert code == 200 and data["available"]
+    assert any(f["indicator"] == "tracker" for f in data["findings"])
+
+
+def test_hunt_endpoint_simulated(base_url):
+    code, data = get(base_url + "/api/hunt?source=wifi&target=HomeNet&simulate=1")
+    assert code == 200 and data["found"] is True
+    assert data["rssi_dbm"] < 0 and data["distance_m"] > 0
+    # A target that isn't present returns found=False.
+    _, miss = get(base_url + "/api/hunt?source=wifi&target=nope&simulate=1")
+    assert miss["found"] is False
+
+
+def test_dashboard_has_source_panels(base_url):
+    with urllib.request.urlopen(base_url + "/", timeout=5) as r:
+        html = r.read().decode()
+    assert 'id="wifi"' in html and 'id="ble"' in html and 'id="foxhunt"' in html
+    assert "loadWifi" in html and "loadBle" in html and "toggleHunt" in html
+
+
 def test_bookmark_add_requires_token():
     state = web.build_app_state(Config(), force_simulate=True, token="tok")
     handler = web._make_handler(state)

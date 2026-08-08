@@ -17,6 +17,10 @@ All notable changes to RFHound. Versioning is [SemVer](https://semver.org/).
   once), `wifi channels` (occupancy + least-congested recommendation), OUI
   vendor annotation on scans, and automation `wifi`/`ble` tasks (continuous
   evil-twin / tracker / new-device monitoring on a sensor node).
+- **Dashboard Wi-Fi/BLE/Foxhunt** — new panels for Wi-Fi APs (vendor +
+  evil-twin/open findings) and BLE devices (tracker flags), plus a live
+  **Foxhunt** RSSI meter (pick a source + target → hotter/colder + range).
+  New endpoints: `/api/wifi`, `/api/ble`, `/api/sources`, `/api/hunt`.
 - **PDF reports** — `rfhound recon --report survey.pdf` (any `.pdf` path) renders
   a situational-awareness PDF via a dependency-free, pure-stdlib writer (PDF
   base-14 fonts, no reportlab/weasyprint) — keeping the light-core promise.
