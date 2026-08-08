@@ -33,7 +33,12 @@ approves each publish.
    git push origin v1.3.0
    ```
 4. The workflow runs the test suite, builds the sdist + wheel, `twine check`s
-   them, and publishes to PyPI. Watch it under the repo's **Actions** tab.
+   them, **creates the GitHub Release** (notes auto-extracted from the matching
+   `## [x.y.z]` section of `CHANGELOG.md`, with the wheel + sdist attached), and
+   publishes to PyPI. Watch it under the repo's **Actions** tab.
+
+Because the release body comes straight from the CHANGELOG, keeping that file
+current is all that's needed — there's no separate release-notes step to write.
 
 A GitHub *Release* published from the tag also triggers the workflow, so you can
 release from the GitHub UI instead of pushing a tag if you prefer.
