@@ -70,5 +70,13 @@ rfhound track show 3a1b                  # details for one id
 rfhound track add adsb 4ca7b3 --freq 1090
 ```
 
+Add `--eob` to also register the decoded channel as an active emitter in the
+[emitter catalogue](SIGINT.md) (Electronic Order of Battle) as messages arrive:
+
+```bash
+rfhound decode run adsb --track --eob     # track IDs and log the channel as an emitter
+rfhound sigint emitters                   # the channel now appears in the EOB
+```
+
 Sightings persist in `~/.config/rfhound/sightings.json` and are exposed at
 `/api/sightings`. It's a receive log only — no external lookups.

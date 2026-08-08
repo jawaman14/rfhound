@@ -32,6 +32,9 @@ All notable changes to RFHound. Versioning is [SemVer](https://semver.org/).
 - **Correlated RollJam detection** (`defense rolljam-check`) — fuses jamming and
   fob-press events on a timeline to flag a press under active jamming (and, the
   strongest signature, two such presses close together). Detection only.
+- **Live decode → emitter catalogue** (`decode run --eob`) — registers the
+  decoded channel as an active emitter in the EOB as messages arrive (joining the
+  existing `--track` sightings wiring).
 
 ### Removed
 - Dead code: unused `console.live_lines`/`make_text` helpers (and their now-orphan

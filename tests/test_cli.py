@@ -10,6 +10,29 @@ def run(argv):
     return cli.main(argv)
 
 
+def test_decode_eob_and_track_wiring(tmp_path, monkeypatch):
+    import argparse
+    from rfhound.config import Config
+    from rfhound.modules import sigint, sightings
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+
+    def fake_run(recipe, cfg, *, freq_hz, seconds, on_line=None, dry_run=False):
+        lines = ['{"icao":"ABC123"}', '{"icao":"DEF456"}']
+        for ln in lines:
+            if on_line:
+                on_line(ln)
+        return lines
+
+    monkeypatch.setattr(cli.decode_mod, "run_decoder", fake_run)
+    args = argparse.Namespace(decode_cmd="run", recipe="adsb", freq=None, seconds=1,
+                              track=True, eob=True, dry_run=False)
+    assert cli.cmd_decode(args, Config(simulate_mode=True)) == 0
+    emitters = sigint.EmitterCatalog().list()
+    assert any(round(e.freq_mhz) == 1090 for e in emitters)  # channel in the EOB
+    ids = {s.id for s in sightings.SightingsStore().list()}
+    assert {"ABC123", "DEF456"} <= ids                        # IDs tracked
+
+
 def test_config_wizard_saves(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     answers = iter([str(tmp_path / "caps"), "10", "24", "20", "y", "n", "y", "n"])

@@ -548,13 +548,23 @@ def cmd_decode(args: argparse.Namespace, cfg: Config) -> int:
     if getattr(args, "track", False):
         from .modules import sightings
         store = sightings.SightingsStore()
+    cat = None
+    eob_state = {"registered": False}
+    if getattr(args, "eob", False):
+        from .modules import sigint as sigint_mod
+        cat = sigint_mod.EmitterCatalog()
 
-        def on_line(line):
-            console.print_(line)
+    def on_line(line):
+        console.print_(line)
+        if store is not None:
+            from .modules import sightings
             sightings.ingest_json_line(store, recipe.id, line,
                                        freq_mhz=freq_hz / 1e6, save=False)
-    else:
-        on_line = console.print_
+        # Live EOB: on the first decoded line, register this channel as an
+        # active emitter carrying the recipe's protocol.
+        if cat is not None and line.strip() and not eob_state["registered"]:
+            cat.ingest(freq_hz / 1e6, guess=recipe.name, save=True)
+            eob_state["registered"] = True
 
     try:
         lines = decode_mod.run_decoder(
@@ -566,6 +576,9 @@ def cmd_decode(args: argparse.Namespace, cfg: Config) -> int:
     if store is not None:
         store.save()
         console.success(f"Tracked {len(store.data)} unique ID(s) — see 'rfhound track list'.")
+    if eob_state["registered"]:
+        console.success(f"Registered {recipe.name} @ {freq_hz/1e6:.3f} MHz in the emitter "
+                        "catalogue — see 'rfhound sigint emitters'.")
     console.success(f"Decoder finished ({len(lines)} lines).")
     return 0
 
@@ -1635,6 +1648,8 @@ def build_parser() -> argparse.ArgumentParser:
     drun.add_argument("--seconds", type=float, default=30, help="Listen duration (s)")
     drun.add_argument("--track", action="store_true",
                       help="Record decoded IDs (ICAO/MMSI/sensor/capcode) to the sightings log")
+    drun.add_argument("--eob", action="store_true",
+                      help="Register the decoded channel as an active emitter in the catalogue (EOB)")
     drun.add_argument("--dry-run", action="store_true", help="Print the command only")
     pd.set_defaults(func=cmd_decode)
 
