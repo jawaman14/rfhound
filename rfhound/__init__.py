@@ -11,7 +11,7 @@ functionality disabled by default and gated behind explicit authorization. See
 ``docs/LEGAL.md``.
 """
 
-__version__ = "1.2.0"
+__version__ = "1.3.0"
 __author__ = "RFHound contributors"
 
 __all__ = ["__version__"]

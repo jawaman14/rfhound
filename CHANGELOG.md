@@ -2,7 +2,13 @@
 
 All notable changes to RFHound. Versioning is [SemVer](https://semver.org/).
 
-## [Unreleased] — v1.3 (rebuild & beef-up)
+## [1.3.0] — 2026-08-08
+
+A ground-up dashboard rebuild plus a broad "beef up" pass: dashboard capture and
+new panels, an RF front-end guide, config wizard, email + NDJSON alerting,
+GeoJSON export, Docker/systemd packaging, and deeper detection (jamming-from-IQ,
+RollJam, live decode→EOB). Still receive-first; no-Electronic-Attack guarantees
+unchanged and test-enforced. **289 tests**, flake8-clean.
 
 ### Added
 - **VISION.md** — the project's purpose, aim, and explicit positioning vs other

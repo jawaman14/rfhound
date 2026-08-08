@@ -1,7 +1,11 @@
 # RFHound 🐕‍🦺📡
 
 **A friendly, powerful HackRF reconnaissance & RF situational-awareness toolkit.**
-_Version 1.3 (dev) · receive-first · 278 tests · MIT._
+_Version 1.3 · receive-first · 289 tests · MIT._
+
+```bash
+pip install rfhound            # once published to PyPI
+```
 
 > See [`docs/VISION.md`](docs/VISION.md) for what RFHound is (and isn't) — a
 > receive-first RF situational-awareness & defensive-SIGINT console, not a
@@ -190,6 +194,7 @@ ACARS/APRS, NOAA weather-satellite imagery, GPS L1 (receive-only), and the busy
 
 - [`docs/HELP.md`](docs/HELP.md) — **full command reference** (start here)
 - [`docs/VISION.md`](docs/VISION.md) — purpose, aim & positioning vs other SDR software
+- [`docs/RELEASING.md`](docs/RELEASING.md) — how releases are cut & published to PyPI
 - [`CHANGELOG.md`](CHANGELOG.md) — version history
 - [`ROADMAP.md`](ROADMAP.md) — where the project is going (incl. TDOA geolocation)
 - [`docs/LEGAL.md`](docs/LEGAL.md) — **read this first**; law, ethics, and what's excluded
