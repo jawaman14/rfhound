@@ -5,6 +5,14 @@ All notable changes to RFHound. Versioning is [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **Multiple RF sources — Wi-Fi & Bluetooth** (passive) — use the host PC's
+  built-in Wi-Fi and Bluetooth adapters alongside the HackRF: `wifi scan`
+  (APs + RSSI, evil-twin/open/rogue analysis), `ble scan` (devices + RSSI,
+  tracker/persistent-device detection), and `sources` (what's available). Scan
+  tools only — no deauth, injection, monitor-mode, evil-twin, or BLE spoofing.
+- **RSSI locating** — `hunt` foxhunts a target by RSSI from any source
+  (Wi-Fi/BLE/HackRF) with a hotter/colder trend and a log-distance range
+  estimate; multi-node RSSI (incl. Wi-Fi/BLE) feeds `sigint locate` for a fix.
 - **PDF reports** — `rfhound recon --report survey.pdf` (any `.pdf` path) renders
   a situational-awareness PDF via a dependency-free, pure-stdlib writer (PDF
   base-14 fonts, no reportlab/weasyprint) — keeping the light-core promise.

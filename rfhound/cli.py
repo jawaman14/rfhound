@@ -1511,6 +1511,162 @@ def cmd_config(args: argparse.Namespace, cfg: Config) -> int:
     return 0
 
 
+def cmd_wifi(args: argparse.Namespace, cfg: Config) -> int:
+    from .modules import wifi
+    import json
+    sim = args.simulate or cfg.simulate_mode
+    if sim:
+        aps = wifi.simulate_wifi()
+    else:
+        ok, note = wifi.available()
+        if not ok:
+            console.error(note)
+            return 2
+        try:
+            aps = wifi.scan_wifi(iface=args.iface)
+        except RuntimeError as exc:
+            console.error(f"Wi-Fi scan failed: {exc}")
+            return 2
+    findings = wifi.analyze_wifi(aps) if args.analyze else []
+    if args.json:
+        console.raw(json.dumps({
+            "aps": [{"bssid": a.bssid, "ssid": a.ssid, "rssi_dbm": a.rssi_dbm,
+                     "channel": a.channel, "band": a.band, "security": a.security} for a in aps],
+            "findings": [{"indicator": f.indicator, "detail": f.detail,
+                          "severity": f.severity} for f in findings]}, indent=2))
+        return 0
+    console.rule("Wi-Fi scan (passive)" + (" · SIMULATED" if sim else ""))
+    rows = [[a.ssid or "(hidden)", a.bssid, f"{a.rssi_dbm:.0f}", a.band,
+             str(a.channel or "—"), a.security] for a in aps]
+    console.table(f"Access points ({len(aps)})",
+                  ["SSID", "BSSID", "dBm", "Band", "Ch", "Security"], rows)
+    if args.analyze:
+        if not findings:
+            console.success("No rogue-AP / evil-twin / open-network findings.")
+        for f in findings:
+            (console.error if f.severity == "high" else console.warn)(
+                f"[{f.severity}] {f.indicator}: {f.detail}")
+    return 0
+
+
+def cmd_ble(args: argparse.Namespace, cfg: Config) -> int:
+    from .modules import bluetooth as ble
+    import json
+    sim = args.simulate or cfg.simulate_mode
+    if sim:
+        devices = ble.simulate_ble()
+    else:
+        ok, note = ble.available()
+        if not ok:
+            console.error(note)
+            return 2
+        try:
+            devices = ble.scan_ble(seconds=args.seconds)
+        except RuntimeError as exc:
+            console.error(f"BLE scan failed: {exc}")
+            return 2
+    findings = ble.analyze_ble(devices) if args.analyze else []
+    if args.json:
+        console.raw(json.dumps({
+            "devices": [{"addr": d.addr, "name": d.name, "rssi_dbm": d.rssi_dbm,
+                         "kind": d.kind} for d in devices],
+            "findings": [{"indicator": f.indicator, "detail": f.detail,
+                          "severity": f.severity} for f in findings]}, indent=2))
+        return 0
+    console.rule("Bluetooth LE scan (passive)" + (" · SIMULATED" if sim else ""))
+    rows = [[d.name or "(unknown)", d.addr, f"{d.rssi_dbm:.0f}", d.kind or "—"] for d in devices]
+    console.table(f"BLE devices ({len(devices)})", ["Name", "Address", "dBm", "Flags"], rows)
+    if args.analyze:
+        if not findings:
+            console.success("No tracker / persistent-device findings.")
+        for f in findings:
+            (console.error if f.severity == "high" else console.warn)(
+                f"[{f.severity}] {f.indicator}: {f.detail}")
+    return 0
+
+
+def cmd_sources(args: argparse.Namespace, cfg: Config) -> int:
+    """List the passive RF sources available on this host (HackRF + Wi-Fi + BLE)."""
+    from .modules import wifi
+    from .modules import bluetooth as ble
+    console.rule("RF sources")
+    hackrf = device.is_present()
+    wok, wnote = wifi.available()
+    bok, bnote = ble.available()
+    rows = [
+        ["HackRF (1 MHz–6 GHz)", "yes" if hackrf else "no",
+         "sweep / capture / decode" if hackrf else "not detected (use --simulate)"],
+        ["Wi-Fi (2.4/5/6 GHz APs)", "yes" if wok else "no",
+         f"via {wnote}" if wok else wnote],
+        ["Bluetooth LE", "yes" if bok else "no", f"via {bnote}" if bok else bnote],
+    ]
+    console.table("Passive sources", ["Source", "Available", "Notes"], rows)
+    console.print_("Scan them: rfhound wifi scan --analyze · rfhound ble scan --analyze · "
+                   "rfhound recon")
+    console.print_("Locate by RSSI: rfhound hunt --source wifi --target <SSID/BSSID> · "
+                   "rfhound sigint locate --file reports.json")
+    return 0
+
+
+def cmd_hunt(args: argparse.Namespace, cfg: Config) -> int:
+    """Foxhunt a signal by RSSI from a chosen source (single node: hotter/colder)."""
+    import time
+    from .modules import rssi as rssi_mod
+    sim = args.simulate or cfg.simulate_mode
+    target = (args.target or "").lower()
+
+    def sample():
+        """Return the target's current RSSI (dBm) from the chosen source, or None."""
+        if args.source == "wifi":
+            from .modules import wifi
+            aps = wifi.simulate_wifi() if sim else wifi.scan_wifi(iface=args.iface)
+            for a in aps:
+                if target in a.bssid or target in a.ssid.lower():
+                    return a.rssi_dbm
+        elif args.source == "ble":
+            from .modules import bluetooth as ble
+            devs = ble.simulate_ble() if sim else ble.scan_ble(seconds=args.seconds)
+            for d in devs:
+                if target in d.addr or target in (d.name or "").lower():
+                    return d.rssi_dbm
+        else:  # hackrf: peak power near a target frequency (MHz)
+            try:
+                f = float(args.target)
+            except ValueError:
+                return None
+            result = sweep_mod.sweep(cfg, f - 1, f + 1, simulate=sim)
+            return max((b.power_db for b in result.bins), default=None)
+        return None
+
+    console.rule(f"RSSI foxhunt · {args.source} · target '{args.target}'"
+                 + (" · SIMULATED" if sim else ""))
+    series: list = []
+    for i in range(max(1, args.rounds)):
+        if sim and args.source in ("wifi", "ble"):
+            rssi_val = -85 + 8 * i + (0 if i == 0 else 0)   # synthetic: getting hotter
+        else:
+            try:
+                rssi_val = sample()
+            except RuntimeError as exc:
+                console.error(f"Source error: {exc}")
+                return 2
+        if rssi_val is None:
+            console.warn(f"Target '{args.target}' not seen this round.")
+        else:
+            series.append(rssi_val)
+            t = rssi_mod.hunt_trend(series, tx_power_dbm=args.tx_power, path_loss_n=args.path_loss)
+            arrow = {"hotter": "↑ warmer", "colder": "↓ colder", "steady": "· steady"}[t.trend]
+            console.print_(f"  round {i+1}: {rssi_val:.0f} dBm  ~{t.est_distance_m:.0f} m  {arrow}")
+        if i + 1 < args.rounds:
+            time.sleep(max(0.0, args.interval))
+    if not series:
+        return 1
+    final = rssi_mod.hunt_trend(series, tx_power_dbm=args.tx_power, path_loss_n=args.path_loss)
+    console.success(f"Strongest {final.best_dbm:.0f} dBm · latest ~{final.est_distance_m:.0f} m "
+                    f"({final.trend}). Walk toward stronger RSSI.")
+    return 0
+
+
 def cmd_menu(args: argparse.Namespace, cfg: Config) -> int:
     from .menu import run_menu
     return run_menu(cfg)
@@ -1908,6 +2064,46 @@ def build_parser() -> argparse.ArgumentParser:
     ml.add_argument("--dir", help="Mods directory (default ~/.config/rfhound/mods)")
     msub.add_parser("sample", help="Write a sample mod to the mods directory")
     pm.set_defaults(func=cmd_mods, mods_cmd="list", dir=None)
+
+    psrc = sub.add_parser("sources", help="List passive RF sources (HackRF + Wi-Fi + BLE)")
+    psrc.set_defaults(func=cmd_sources)
+
+    pwifi = sub.add_parser("wifi", help="Passive Wi-Fi AP scan (host adapter) with RSSI")
+    wsub = pwifi.add_subparsers(dest="wifi_cmd")
+    wscan = wsub.add_parser("scan", help="Scan for access points")
+    wscan.add_argument("--iface", help="Wi-Fi interface (default wlan0 for iw)")
+    wscan.add_argument("--analyze", action="store_true",
+                       help="Flag evil-twin / open / rogue APs")
+    wscan.add_argument("--json", action="store_true", help="Machine-readable output")
+    wscan.add_argument("--simulate", action="store_true")
+    pwifi.set_defaults(func=cmd_wifi, wifi_cmd="scan", iface=None, analyze=False,
+                       json=False, simulate=False)
+
+    pble = sub.add_parser("ble", help="Passive Bluetooth LE scan (host adapter) with RSSI")
+    bsub = pble.add_subparsers(dest="ble_cmd")
+    bscan = bsub.add_parser("scan", help="Discover BLE devices")
+    bscan.add_argument("--seconds", type=int, default=8, help="Scan duration")
+    bscan.add_argument("--analyze", action="store_true",
+                       help="Flag trackers / persistent devices")
+    bscan.add_argument("--json", action="store_true", help="Machine-readable output")
+    bscan.add_argument("--simulate", action="store_true")
+    pble.set_defaults(func=cmd_ble, ble_cmd="scan", seconds=8, analyze=False,
+                      json=False, simulate=False)
+
+    phunt = sub.add_parser("hunt", help="Foxhunt a signal by RSSI (hotter/colder + distance)")
+    phunt.add_argument("--source", choices=["wifi", "ble", "hackrf"], default="wifi")
+    phunt.add_argument("--target", required=True,
+                       help="SSID/BSSID (wifi), name/addr (ble), or freq MHz (hackrf)")
+    phunt.add_argument("--rounds", type=int, default=1, help="Number of RSSI samples")
+    phunt.add_argument("--interval", type=float, default=2.0, help="Seconds between rounds")
+    phunt.add_argument("--seconds", type=int, default=8, help="BLE scan duration per round")
+    phunt.add_argument("--iface", help="Wi-Fi interface")
+    phunt.add_argument("--tx-power", dest="tx_power", type=float, default=-40.0,
+                       help="Expected RSSI at 1 m (calibrate per device/band)")
+    phunt.add_argument("--path-loss", dest="path_loss", type=float, default=2.5,
+                       help="Path-loss exponent (2 free space, 2.5-4 indoors)")
+    phunt.add_argument("--simulate", action="store_true")
+    phunt.set_defaults(func=cmd_hunt)
 
     pcfg = sub.add_parser("config", help="Show / init configuration")
     csub = pcfg.add_subparsers(dest="config_cmd")

@@ -72,6 +72,8 @@ the law. That's RFHound.
 | **Detect** GNSS jamming / spoofing | `rfhound sigint gnss --file obs.json` — C/N0, AGC, position-jump & elevation checks (`--json` for SIEM) |
 | Pick the right antenna/filter/LNA | `rfhound doctor --rf` (or `--rf --freq 1090`) — front-end guide per band |
 | Automate + alert (webhook or email) | `rfhound automate add …` — scheduled receive-only tasks → webhook/email/SIEM |
+| Use the PC's Wi-Fi / Bluetooth too | `rfhound wifi scan --analyze` · `rfhound ble scan --analyze` — passive AP/device RSSI, evil-twin & tracker detection |
+| Find where a signal comes from (RSSI) | `rfhound hunt --source wifi --target <SSID>` (hotter/colder + range) · multi-node → `sigint locate` |
 
 ## Highlights
 
@@ -209,6 +211,7 @@ ACARS/APRS, NOAA weather-satellite imagery, GPS L1 (receive-only), and the busy
 - [`docs/AUTOMATION.md`](docs/AUTOMATION.md) — scheduled/looping RF tasks with triggers and alerting
 - [`docs/RECORDINGS.md`](docs/RECORDINGS.md) — captures that store their classification + decode settings
 - [`docs/SIGINT.md`](docs/SIGINT.md) — SIGINT/EW-support: ELINT pulse analysis, jamming characterisation, EOB, geolocation
+- [`docs/SOURCES.md`](docs/SOURCES.md) — Wi-Fi/Bluetooth as passive sources + RSSI locating (foxhunt & multi-node)
 - [`docs/THREATS.md`](docs/THREATS.md) — RF threat model & attack surface by band/encoding (defensive)
 - [`docs/FREQUENCIES.md`](docs/FREQUENCIES.md) — the frequency knowledge base
 - [`docs/MODDING.md`](docs/MODDING.md) — extend RFHound with your own bands/decoders/detectors
