@@ -53,8 +53,13 @@ sudo usermod -aG plugdev "$USER"    # then log out/in
 rfhound recon                        # survey high-value bands
 rfhound recon --category ism         # just the ISM bands
 rfhound recon --report site.html     # write an HTML report
+rfhound recon --report site.pdf      # ...or a PDF (dependency-free)
+rfhound recon --report site.md       # ...or Markdown
 rfhound recon --simulate             # no hardware needed
 ```
+
+The report format follows the file extension (`.md` / `.html` / `.pdf`). PDF
+uses a built-in, pure-stdlib writer — no extra install needed.
 
 ### 2. Look at a slice of spectrum (sweep)
 

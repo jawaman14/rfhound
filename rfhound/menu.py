@@ -39,8 +39,7 @@ def _menu_recon(cfg: Config, simulate: bool) -> None:
     if console.confirm("Save a report?", default=False):
         out = Path(console.ask("Report path", default="rfhound-recon.md"))
         from .modules import report as report_mod
-        fmt = "html" if out.suffix.lower() in (".html", ".htm") else "md"
-        report_mod.write_report(report, out, fmt=fmt)
+        report_mod.write_report(report, out, fmt=report_mod.fmt_for_path(out))
         console.success(f"Wrote {out}")
 
 

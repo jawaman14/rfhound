@@ -97,9 +97,57 @@ def to_html(report: ReconReport, *, title: str = "RFHound recon report") -> str:
 """
 
 
+def to_pdf(report: ReconReport, *, title: str = "RFHound recon report") -> bytes:
+    """Render the recon report to a PDF (dependency-free, base-14 fonts)."""
+    from .pdf import PdfDoc
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    mode = "SIMULATED (no hardware)" if report.simulated else "live capture"
+    doc = PdfDoc(title)
+    doc.paragraph(f"Generated {now}  ·  RFHound v{__version__}  ·  Mode: {mode}  ·  "
+                  f"{len(report.active_findings)}/{len(report.findings)} bands active")
+    doc.paragraph("Receive-only reconnaissance. Confirm you are authorized before "
+                  "transmitting.")
+
+    doc.heading("Active findings", 2)
+    if not report.active_findings:
+        doc.paragraph("No active signals detected.")
+    else:
+        rows = []
+        for f in report.active_findings:
+            top = max(f.peaks, key=lambda p: p.power_db)
+            rows.append([f.band.name, f.band.category, len(f.peaks),
+                         f"{top.freq_mhz:.3f}MHz@{top.power_db}dB", f.band.decoder or "-"])
+        doc.table(["Band", "Category", "Peaks", "Strongest", "Decoder"], rows)
+
+    doc.heading("Detailed peaks", 2)
+    for f in report.findings:
+        doc.heading(f"{f.band.name}  ({f.band.low_hz/1e6:.3f}-{f.band.high_hz/1e6:.3f} MHz)", 3)
+        doc.paragraph(f.band.description)
+        doc.paragraph(f"Noise floor: {f.noise_floor_db} dB")
+        if f.peaks:
+            for p in sorted(f.peaks, key=lambda p: p.power_db, reverse=True):
+                extra = f" - {p.band.description}" if p.band else ""
+                doc.bullet(f"{p.freq_mhz:.4f} MHz @ {p.power_db} dB{extra}")
+        else:
+            doc.bullet("(quiet)")
+    return doc.render()
+
+
+def fmt_for_path(path: Path) -> str:
+    """Pick the report format from a file suffix (.pdf / .html / .md)."""
+    suffix = path.suffix.lower()
+    if suffix == ".pdf":
+        return "pdf"
+    if suffix in (".html", ".htm"):
+        return "html"
+    return "md"
+
+
 def write_report(report: ReconReport, out_path: Path, *, fmt: str = "md") -> Path:
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    if fmt == "html":
+    if fmt == "pdf":
+        out_path.write_bytes(to_pdf(report))
+    elif fmt == "html":
         out_path.write_text(to_html(report))
     else:
         out_path.write_text(to_markdown(report))

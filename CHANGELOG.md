@@ -2,6 +2,13 @@
 
 All notable changes to RFHound. Versioning is [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- **PDF reports** — `rfhound recon --report survey.pdf` (any `.pdf` path) renders
+  a situational-awareness PDF via a dependency-free, pure-stdlib writer (PDF
+  base-14 fonts, no reportlab/weasyprint) — keeping the light-core promise.
+
 ## [1.3.0] — 2026-08-08
 
 A ground-up dashboard rebuild plus a broad "beef up" pass: dashboard capture and

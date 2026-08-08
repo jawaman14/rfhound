@@ -436,7 +436,7 @@ def cmd_recon(args: argparse.Namespace, cfg: Config) -> int:
 
     if args.report:
         out = Path(args.report)
-        fmt = "html" if out.suffix.lower() in (".html", ".htm") else "md"
+        fmt = report_mod.fmt_for_path(out)
         report_mod.write_report(report, out, fmt=fmt)
         console.success(f"Report written to {out}")
     return 0
@@ -1615,7 +1615,7 @@ def build_parser() -> argparse.ArgumentParser:
     pr.add_argument("--category", help="Restrict to one band category")
     pr.add_argument("--snr", type=float, default=12.0, help="Peak threshold (dB)")
     pr.add_argument("--bin", type=int, default=100, help="Bin width (kHz)")
-    pr.add_argument("--report", help="Write a report to this path (.md or .html)")
+    pr.add_argument("--report", help="Write a report to this path (.md, .html, or .pdf)")
     pr.add_argument("--simulate", action="store_true", help="Synthesise data (no hardware)")
     pr.set_defaults(func=cmd_recon)
 
