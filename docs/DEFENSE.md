@@ -49,6 +49,23 @@ rfhound defense replay-check --simulate
 Pair it with a decoder (e.g. pipe `rtl_433 -F json` payloads into this format) to
 get runtime replay alerts.
 
+## 2b. RollJam correlation — `defense rolljam-check`
+
+RollJam jams a fob's band *while* you press it, capturing the rolling code under
+cover (your car doesn't unlock, so you press again — and the attacker keeps the
+first code). This fuses jamming events and fob presses on a timeline and flags a
+**press under active jamming** — and, the strongest signature, **two such presses
+close together**.
+
+```bash
+rfhound defense rolljam-check --simulate
+rfhound defense rolljam-check --file trace.json
+#   trace.json: [{"t":10,"kind":"jam","freq_mhz":433.92,"duration_s":6},
+#                {"t":11,"kind":"press","freq_mhz":433.92}, ...]
+```
+
+Detection only — RFHound never jams or replays a captured code.
+
 ## 3. Rolling-code posture assessment — `defense rolling-assess`
 
 Capture a handful of presses of the **same button** on a device you're

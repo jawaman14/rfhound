@@ -811,6 +811,34 @@ def cmd_defense(args: argparse.Namespace, cfg: Config) -> int:
                            f"min gap {f.min_gap_s}s — {f.reason}")
         return 1
 
+    if args.defense_cmd == "rolljam-check":
+        import json
+        if args.simulate:
+            events = defense_mod.simulate_rolljam_trace()
+        elif args.file:
+            try:
+                raw = json.loads(Path(args.file).read_text())
+            except (OSError, ValueError) as exc:
+                console.error(f"Could not read trace: {exc}")
+                return 2
+            events = [defense_mod.RollJamEvent(
+                t=float(e.get("t", 0)), kind=e.get("kind", "press"),
+                freq_mhz=e.get("freq_mhz"), duration_s=float(e.get("duration_s", 0)))
+                for e in raw]
+        else:
+            console.error("Provide --file <trace.json> "
+                          "([{t,kind:jam|press,freq_mhz,duration_s}, ...]) or --simulate.")
+            return 1
+        report = defense_mod.detect_rolljam(events)
+        console.rule("RollJam correlation check")
+        if report.status == "nominal":
+            console.success("No RollJam pattern (no fob press under active jamming).")
+            return 0
+        console.error(f"RollJam SUSPECTED ({report.confidence}%)")
+        for f in report.findings:
+            console.print_(f"  • [{f.severity}] {f.indicator}: {f.detail}")
+        return 1
+
     if args.defense_cmd == "baseline":
         if args.baseline_cmd == "save":
             path = intel_mod.save_baseline(
@@ -1657,6 +1685,10 @@ def build_parser() -> argparse.ArgumentParser:
     frc.add_argument("--fixed", action="store_true",
                      help="Device uses a fixed code (only flag implausibly fast repeats)")
     frc.add_argument("--simulate", action="store_true", help="Use a synthetic replay trace")
+    frj = fsub.add_parser("rolljam-check",
+                          help="Correlate jamming + fob presses to flag a RollJam capture")
+    frj.add_argument("--file", help="JSON trace: [{t,kind:jam|press,freq_mhz,duration_s}, ...]")
+    frj.add_argument("--simulate", action="store_true", help="Use a synthetic RollJam trace")
 
     fbl = fsub.add_parser("baseline", help="TSCM: save a known-good spectrum and diff for rogue emitters")
     blsub = fbl.add_subparsers(dest="baseline_cmd", required=True)

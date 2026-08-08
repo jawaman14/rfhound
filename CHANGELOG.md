@@ -29,6 +29,9 @@ All notable changes to RFHound. Versioning is [SemVer](https://semver.org/).
 - **Jamming characterisation from IQ** (`sigint jamming --file`, `--iq-kind`) —
   classifies swept/chirp and pulsed jammers (plus barrage and spot/CW) from a
   capture's spectrogram, catching agile jammers a single sweep misses.
+- **Correlated RollJam detection** (`defense rolljam-check`) — fuses jamming and
+  fob-press events on a timeline to flag a press under active jamming (and, the
+  strongest signature, two such presses close together). Detection only.
 
 ### Removed
 - Dead code: unused `console.live_lines`/`make_text` helpers (and their now-orphan

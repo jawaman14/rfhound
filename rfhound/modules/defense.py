@@ -193,6 +193,83 @@ def detect_replays(
 
 
 # --------------------------------------------------------------------------- #
+# 2b. Correlated RollJam detection (jam + fob press fused in time)
+# --------------------------------------------------------------------------- #
+@dataclass
+class RollJamEvent:
+    t: float
+    kind: str                    # "jam" | "press"
+    freq_mhz: float | None = None
+    duration_s: float = 0.0      # jam window length (for kind == "jam")
+
+
+@dataclass
+class RollJamFinding:
+    t: float
+    indicator: str
+    detail: str
+    severity: str = "high"
+
+
+@dataclass
+class RollJamReport:
+    status: str                  # nominal | suspected
+    confidence: int
+    findings: list
+
+
+def detect_rolljam(events: list, *, window_s: float = 3.0,
+                   freq_tol_mhz: float = 1.0) -> RollJamReport:
+    """Fuse jamming and fob-press events to flag a RollJam capture pattern.
+
+    RollJam jams the fob band while a press happens (so the rolling code is
+    captured under cover and the receiver never actuates), often provoking a
+    second press. We flag: a fob press that occurs while jamming is active on the
+    same frequency, and — strongest signature — two such presses close together.
+    Detection only; RFHound never jams or replays a captured code.
+    """
+    evs = sorted(events, key=lambda e: e.t)
+    jams = [e for e in evs if e.kind == "jam"]
+    presses = [e for e in evs if e.kind == "press"]
+    findings: list = []
+
+    def jam_active(t, f):
+        for j in jams:
+            if j.t - window_s <= t <= j.t + j.duration_s + window_s:
+                if f is None or j.freq_mhz is None or abs(j.freq_mhz - f) <= freq_tol_mhz:
+                    return j
+        return None
+
+    jammed = []
+    for p in presses:
+        if jam_active(p.t, p.freq_mhz):
+            jammed.append(p)
+            findings.append(RollJamFinding(
+                p.t, "press-under-jam",
+                f"t={p.t:.0f}: fob press on {p.freq_mhz} MHz while jamming is active — "
+                f"the rolling code may be captured under jam cover (RollJam).", "high"))
+    for i in range(1, len(jammed)):
+        gap = jammed[i].t - jammed[i - 1].t
+        if gap <= window_s * 3:
+            findings.append(RollJamFinding(
+                jammed[i].t, "double-press-under-jam",
+                f"two fob presses within {gap:.0f}s under jamming — classic RollJam "
+                f"(first press captured & suppressed, second let through).", "high"))
+            break
+
+    status = "suspected" if findings else "nominal"
+    confidence = min(95, 45 + 18 * len(findings)) if findings else 0
+    return RollJamReport(status, confidence, findings)
+
+
+def simulate_rolljam_trace() -> list:
+    """A jam window with two fob presses under it — the RollJam signature."""
+    return [RollJamEvent(10.0, "jam", 433.92, 6.0),
+            RollJamEvent(11.0, "press", 433.92),
+            RollJamEvent(13.0, "press", 433.92)]
+
+
+# --------------------------------------------------------------------------- #
 # 3. Rolling-code posture assessment
 # --------------------------------------------------------------------------- #
 @dataclass

@@ -2,6 +2,31 @@ from rfhound.config import Config
 from rfhound.modules import defense
 
 
+def test_rolljam_simulated_suspected():
+    report = defense.detect_rolljam(defense.simulate_rolljam_trace())
+    assert report.status == "suspected"
+    assert report.confidence > 0
+    indicators = {f.indicator for f in report.findings}
+    assert "press-under-jam" in indicators
+    assert "double-press-under-jam" in indicators
+
+
+def test_rolljam_press_without_jam_is_nominal():
+    events = [defense.RollJamEvent(1.0, "press", 433.92),
+              defense.RollJamEvent(20.0, "press", 433.92)]
+    report = defense.detect_rolljam(events)
+    assert report.status == "nominal"
+    assert report.findings == []
+
+
+def test_rolljam_respects_frequency_separation():
+    # A jam on a different frequency than the press should not correlate.
+    events = [defense.RollJamEvent(10.0, "jam", 868.0, 6.0),
+              defense.RollJamEvent(11.0, "press", 433.92)]
+    report = defense.detect_rolljam(events, freq_tol_mhz=1.0)
+    assert report.status == "nominal"
+
+
 def test_interference_monitor_simulated_detects_jamming():
     cfg = Config()
     report = defense.monitor_interference(cfg, 433.0, 435.0, iterations=12, simulate=True)
