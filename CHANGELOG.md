@@ -26,6 +26,11 @@ All notable changes to RFHound. Versioning is [SemVer](https://semver.org/).
   `wifi scan --track` / `ble scan --track` log APs/devices by BSSID/address;
   `track list` and the dashboard Sightings panel show the label + dBm, so you
   can watch a named signal's strength over time and foxhunt it.
+- **RSSI history + sparkline** — each identifier keeps a rolling RSSI history;
+  `track list`/`show` render a unicode sparkline (`▁▂▄▆█▇▅▃`) and the dashboard
+  Sightings panel an inline SVG trend line (approach → recede at a glance).
+- **KML export** for geolocation fixes (`sigint locate … --kml FILE`) — the
+  emitter fix + receiver placemarks for Google Earth, alongside `--geojson`.
 - **PDF reports** — `rfhound recon --report survey.pdf` (any `.pdf` path) renders
   a situational-awareness PDF via a dependency-free, pure-stdlib writer (PDF
   base-14 fonts, no reportlab/weasyprint) — keeping the light-core promise.

@@ -40,3 +40,18 @@ def test_geo_write(tmp_path):
     import json
     data = json.loads(out.read_text())
     assert data["features"][0]["geometry"]["type"] == "Point"
+
+
+def test_geo_kml_valid_xml(tmp_path):
+    import xml.dom.minidom as minidom
+    kml = geo.fix_kml(51.5, -0.12, {"method": "tdoa", "gdop": 0.8},
+                      nodes=[{"node": "n1", "lat": 51.52, "lon": -0.10}])
+    assert "<coordinates>-0.120000,51.500000,0</coordinates>" in kml  # lon,lat,alt
+    assert "<name>n1</name>" in kml
+    out = geo.write_kml(tmp_path / "fix.kml", kml)
+    minidom.parse(str(out))    # parses => well-formed XML
+
+
+def test_geo_kml_escapes_xml():
+    kml = geo.fix_kml(51.5, -0.12, {"note": "a & b <x>"})
+    assert "&amp;" in kml and "&lt;x&gt;" in kml

@@ -476,6 +476,7 @@ def _make_handler(state: AppState):
                     return self._send_json({"sightings": [
                         {"kind": s.kind, "id": s.id, "label": s.label, "count": s.count,
                          "rssi_dbm": s.rssi_dbm, "rssi_best": s.rssi_best,
+                         "rssi_history": s.rssi_history[-24:],
                          "freq_mhz": s.freq_mhz, "last_seen": s.last_seen}
                         for s in store.list()[:200]]})
                 if path == "/api/sweep":

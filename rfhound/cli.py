@@ -605,6 +605,9 @@ def cmd_track(args: argparse.Namespace, cfg: Config) -> int:
                            f"freq={s.freq_mhz or '?'} MHz")
             if s.rssi_dbm is not None:
                 console.print_(f"  RSSI: last {s.rssi_dbm:.0f} dBm · best {s.rssi_best:.0f} dBm")
+                spark = sightings.sparkline(s.rssi_history)
+                if spark:
+                    console.print_(f"  trend: {spark}  ({len(s.rssi_history)} samples)")
             console.print_(f"  first: {time.ctime(s.first_seen)}  last: {time.ctime(s.last_seen)}")
             if s.extra:
                 console.print_(f"  extra: {s.extra}")
@@ -621,11 +624,11 @@ def cmd_track(args: argparse.Namespace, cfg: Config) -> int:
         best = f"/{s.rssi_best:.0f}" if s.rssi_best is not None and s.rssi_best != s.rssi_dbm else ""
         return f"{s.rssi_dbm:.0f}{best}"
     rows = [[s.kind, s.id, s.label or (s.extra.get("model") or s.note or "—"), str(s.count),
-             _rssi(s), f"{s.freq_mhz:.3f}" if s.freq_mhz else "—",
+             _rssi(s), sightings.sparkline(s.rssi_history[-12:]) or "—",
              time.strftime("%m-%d %H:%M", time.localtime(s.last_seen))]
             for s in items[:args.top]]
     console.table(f"Sightings ({len(items)} unique IDs)",
-                  ["Kind", "ID", "Label", "Count", "dBm(last/best)", "Freq", "Last seen"], rows)
+                  ["Kind", "ID", "Label", "Count", "dBm", "RSSI trend", "Last seen"], rows)
     return 0
 
 
@@ -1313,14 +1316,17 @@ def cmd_sigint(args: argparse.Namespace, cfg: Config) -> int:
             if fix.residual_m is not None:
                 extra.append(f"residual {fix.residual_m} m")
             console.print_(f"  {fix.n_nodes} nodes · " + " · ".join(extra) + f" · {fix.detail}")
-            if args.geojson:
+            if args.geojson or args.kml:
                 from .modules import geo
                 nd = [{"node": n.node, "lat": n.lat, "lon": n.lon} for n in nodes]
-                geo.write_geojson(args.geojson, geo.fix_geojson(
-                    fix.lat, fix.lon,
-                    {"method": fix.method, "confidence_m": fix.confidence_m,
-                     "gdop": fix.gdop, "residual_m": fix.residual_m}, nd))
-                console.success(f"Wrote GeoJSON: {args.geojson}")
+                props = {"method": fix.method, "confidence_m": fix.confidence_m,
+                         "gdop": fix.gdop, "residual_m": fix.residual_m}
+                if args.geojson:
+                    geo.write_geojson(args.geojson, geo.fix_geojson(fix.lat, fix.lon, props, nd))
+                    console.success(f"Wrote GeoJSON: {args.geojson}")
+                if args.kml:
+                    geo.write_kml(args.kml, geo.fix_kml(fix.lat, fix.lon, props, nd))
+                    console.success(f"Wrote KML: {args.kml}")
             return 0
         if args.simulate:
             reports = sigint.simulate_reports()
@@ -1337,14 +1343,17 @@ def cmd_sigint(args: argparse.Namespace, cfg: Config) -> int:
         console.success(f"Estimated position: {est.lat}, {est.lon} "
                         f"({est.confidence}% · {est.n_receivers} receivers)")
         console.print_(f"  strongest receiver: {est.strongest}  ·  {est.detail}")
-        if args.geojson:
+        if args.geojson or args.kml:
             from .modules import geo
-            geo.write_geojson(args.geojson, geo.fix_geojson(
-                est.lat, est.lon,
-                {"method": "rssi-centroid", "confidence": est.confidence,
-                 "n_receivers": est.n_receivers},
-                reports if isinstance(reports, list) else None))
-            console.success(f"Wrote GeoJSON: {args.geojson}")
+            props = {"method": "rssi-centroid", "confidence": est.confidence,
+                     "n_receivers": est.n_receivers}
+            nd = reports if isinstance(reports, list) else None
+            if args.geojson:
+                geo.write_geojson(args.geojson, geo.fix_geojson(est.lat, est.lon, props, nd))
+                console.success(f"Wrote GeoJSON: {args.geojson}")
+            if args.kml:
+                geo.write_kml(args.kml, geo.fix_kml(est.lat, est.lon, props, nd))
+                console.success(f"Wrote KML: {args.kml}")
         return 0
 
     if sub == "gnss":
@@ -2048,6 +2057,7 @@ def build_parser() -> argparse.ArgumentParser:
     sil.add_argument("--trigger", help="Collection trigger tag to solve (default: latest)")
     sil.add_argument("--token", default="", help="Hub bearer token")
     sil.add_argument("--geojson", help="Write the fix + receivers to a GeoJSON file")
+    sil.add_argument("--kml", help="Write the fix + receivers to a KML file (Google Earth)")
     sil.add_argument("--simulate", action="store_true")
     sig = sisub.add_parser(
         "gnss", help="GNSS jamming/spoofing DETECTION from receiver observations (EP)")
@@ -2068,7 +2078,7 @@ def build_parser() -> argparse.ArgumentParser:
                      start=430.0, stop=440.0, file=None, scan=False, clear=False,
                      tdoa=False, hub=None, trigger=None, token="",
                      iq=None, sample_rate=2_000_000, static=False, known=None,
-                     json=False, geojson=None, iq_kind=None)
+                     json=False, geojson=None, kml=None, iq_kind=None)
 
     pau = sub.add_parser("automate", help="Automation: scheduled/looping RF tasks with alerting")
     ausub = pau.add_subparsers(dest="automate_cmd")

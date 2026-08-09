@@ -84,4 +84,5 @@ rfhound sigint locate --tdoa --file nodes.json   # precise, if the nodes are syn
 ```
 
 Pair with the [multi-node hub](MULTINODE.md) to collect RSSI from several nodes,
-and export a fix to a map with `sigint locate --geojson`.
+and export a fix to a map with `sigint locate --geojson` (or `--kml` for Google
+Earth).

@@ -26,6 +26,22 @@ def test_rssi_best_tracks_strongest(tmp_path):
     store.record("wifi", "aa:bb", label="Net", rssi_dbm=-62.0, save=False)
     s = store.get("wifi", "aa:bb")
     assert s.rssi_dbm == -62.0 and s.rssi_best == -55.0 and s.count == 3
+    assert s.rssi_history == [-70.0, -55.0, -62.0]
+
+
+def test_rssi_history_capped(tmp_path):
+    store = sightings.SightingsStore(path=tmp_path / "s.json")
+    for i in range(sightings.RSSI_HISTORY_MAX + 15):
+        store.record("wifi", "aa:bb", rssi_dbm=float(-i), save=False)
+    s = store.get("wifi", "aa:bb")
+    assert len(s.rssi_history) == sightings.RSSI_HISTORY_MAX   # rolling window
+
+
+def test_sparkline():
+    assert sightings.sparkline([]) == ""
+    assert sightings.sparkline([-50]) == ""          # needs >=2 points
+    spark = sightings.sparkline([-80, -60, -40])
+    assert len(spark) == 3 and spark[0] < spark[-1]  # rising
 
 
 # --- OUI vendor lookup ---

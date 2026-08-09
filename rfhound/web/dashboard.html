@@ -303,7 +303,7 @@
       <!-- Sightings -->
       <div class="card section" id="sightings">
         <h2>Sightings — decoded IDs <span class="exp"><button id="sightRefresh">⟳</button></span></h2>
-        <div class="scroll"><table id="sightTbl"><thead><tr><th>Kind</th><th>ID</th><th>Label</th><th>dBm</th><th>Count</th><th>Freq</th></tr></thead><tbody></tbody></table></div>
+        <div class="scroll"><table id="sightTbl"><thead><tr><th>Kind</th><th>ID</th><th>Label</th><th>dBm</th><th>RSSI trend</th><th>Count</th></tr></thead><tbody></tbody></table></div>
       </div>
 
       <!-- Wi-Fi -->
@@ -600,7 +600,12 @@ async function loadSightings(){ const d=await api('/api/sightings'),tb=$('#sight
   if(!d.sightings.length){tb.innerHTML='<tr><td colspan=6 class=muted>No sightings — decode/scan with `--track`.</td></tr>';return;}
   d.sightings.forEach(s=>{ const rssi=s.rssi_dbm!=null?(s.rssi_dbm.toFixed(0)+(s.rssi_best!=null&&s.rssi_best!==s.rssi_dbm?'/'+s.rssi_best.toFixed(0):'')):'—';
     tb.insertAdjacentHTML('beforeend',
-    `<tr><td>${esc(s.kind)}</td><td>${esc(s.id)}</td><td class=muted>${esc(s.label||'—')}</td><td>${rssi}</td><td>${s.count}</td><td>${s.freq_mhz?(+s.freq_mhz).toFixed(3):'—'}</td></tr>`); }); }
+    `<tr><td>${esc(s.kind)}</td><td>${esc(s.id)}</td><td class=muted>${esc(s.label||'—')}</td><td>${rssi}</td><td>${sparkSvg(s.rssi_history)}</td><td>${s.count}</td></tr>`); }); }
+// Inline SVG sparkline from an RSSI series.
+function sparkSvg(vals){ if(!vals||vals.length<2) return '<span class="muted">—</span>';
+  const w=70,h=16,lo=Math.min(...vals),hi=Math.max(...vals),span=(hi-lo)||1;
+  const pts=vals.map((v,i)=>`${(i/(vals.length-1)*w).toFixed(1)},${(h-((v-lo)/span)*h).toFixed(1)}`).join(' ');
+  return `<svg width="${w}" height="${h}" style="vertical-align:middle"><polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="1.5"/></svg>`; }
 
 // ---- Wi-Fi / BLE panels ----
 function findingsHtml(list, cleanMsg){

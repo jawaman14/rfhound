@@ -17,10 +17,25 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 
+RSSI_HISTORY_MAX = 40      # rolling RSSI samples kept per identifier
+_SPARK = "▁▂▃▄▅▆▇█"
+
+
 def sightings_path() -> Path:
     base = os.environ.get("XDG_CONFIG_HOME")
     root = Path(base) if base else (Path.home() / ".config")
     return root / "rfhound" / "sightings.json"
+
+
+def sparkline(values: list) -> str:
+    """A unicode sparkline of a numeric series (empty string if <2 points)."""
+    xs = [float(v) for v in values if v is not None]
+    if len(xs) < 2:
+        return ""
+    lo, hi = min(xs), max(xs)
+    span = (hi - lo) or 1.0
+    return "".join(_SPARK[min(len(_SPARK) - 1, int((v - lo) / span * (len(_SPARK) - 1)))]
+                   for v in xs)
 
 
 @dataclass
@@ -35,6 +50,7 @@ class Sighting:
     label: str = ""                    # human name: SSID / device name / model
     rssi_dbm: float | None = None      # last observed RSSI
     rssi_best: float | None = None     # strongest RSSI seen (closest approach)
+    rssi_history: list = field(default_factory=list)   # recent RSSI samples (rolling)
     extra: dict = field(default_factory=dict)
 
     @property
@@ -93,12 +109,15 @@ class SightingsStore:
             if rssi_dbm is not None:
                 s.rssi_dbm = rssi_dbm
                 s.rssi_best = rssi_dbm if s.rssi_best is None else max(s.rssi_best, rssi_dbm)
+                s.rssi_history = (s.rssi_history + [rssi_dbm])[-RSSI_HISTORY_MAX:]
             if extra:
                 s.extra.update(extra)
         else:
             s = Sighting(kind=kind, id=id, first_seen=now, last_seen=now, count=1,
                          freq_mhz=freq_mhz, note=note, label=label, rssi_dbm=rssi_dbm,
-                         rssi_best=rssi_dbm, extra=extra or {})
+                         rssi_best=rssi_dbm,
+                         rssi_history=[rssi_dbm] if rssi_dbm is not None else [],
+                         extra=extra or {})
             self.data[key] = s
         if save:
             self.save()

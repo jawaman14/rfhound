@@ -32,3 +32,33 @@ def write_geojson(path: str | Path, fc: dict) -> Path:
     p = Path(path)
     p.write_text(json.dumps(fc, indent=2))
     return p
+
+
+def _xesc(s: str) -> str:
+    return (str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            .replace('"', "&quot;"))
+
+
+def fix_kml(lat: float, lon: float, props: dict, nodes: list | None = None) -> str:
+    """A KML document: the emitter fix plus any receiver nodes (for Google Earth)."""
+    def placemark(name, la, lo, desc=""):
+        return (f"<Placemark><name>{_xesc(name)}</name>"
+                f"<description>{_xesc(desc)}</description>"
+                f"<Point><coordinates>{lo:.6f},{la:.6f},0</coordinates></Point></Placemark>")
+
+    desc = "; ".join(f"{k}={v}" for k, v in props.items())
+    parts = [placemark("Emitter fix", lat, lon, desc)]
+    for n in nodes or []:
+        if n.get("lat") is None or n.get("lon") is None:
+            continue
+        parts.append(placemark(str(n.get("node") or n.get("node_id") or "receiver"),
+                               n["lat"], n["lon"], "receiver"))
+    return ('<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<kml xmlns="http://www.opengis.net/kml/2.2"><Document>'
+            + "".join(parts) + "</Document></kml>\n")
+
+
+def write_kml(path: str | Path, kml: str) -> Path:
+    p = Path(path)
+    p.write_text(kml)
+    return p
