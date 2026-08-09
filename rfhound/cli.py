@@ -683,7 +683,7 @@ def cmd_tx(args: argparse.Namespace, cfg: Config) -> int:
         if recent:
             console.print_("Recent transmit audit:")
             for e in recent:
-                console.print_(f"  {e['t']}  {e.get('freq_mhz','?')} MHz  {e['outcome']}"
+                console.print_(f"  {e['t']}  {e.get('freq_mhz', '?')} MHz  {e['outcome']}"
                                + (f" — {e['reason']}" if e.get('reason') else ""))
         return 0
 
@@ -700,7 +700,7 @@ def cmd_tx(args: argparse.Namespace, cfg: Config) -> int:
         if not entries:
             console.warn("No transmit events recorded yet.")
             return 0
-        rows = [[e["t"], f"{e.get('freq_mhz','?')}", e["outcome"],
+        rows = [[e["t"], f"{e.get('freq_mhz', '?')}", e["outcome"],
                  "yes" if e.get("dry_run") else "no",
                  f"{e['duration_s']}s" if e.get("duration_s") is not None else "—",
                  e.get("reason", "")] for e in entries]
