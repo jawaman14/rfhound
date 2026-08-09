@@ -303,7 +303,7 @@
       <!-- Sightings -->
       <div class="card section" id="sightings">
         <h2>Sightings — decoded IDs <span class="exp"><button id="sightRefresh">⟳</button></span></h2>
-        <div class="scroll"><table id="sightTbl"><thead><tr><th>Kind</th><th>ID</th><th>Count</th><th>Freq</th></tr></thead><tbody></tbody></table></div>
+        <div class="scroll"><table id="sightTbl"><thead><tr><th>Kind</th><th>ID</th><th>Label</th><th>dBm</th><th>Count</th><th>Freq</th></tr></thead><tbody></tbody></table></div>
       </div>
 
       <!-- Wi-Fi -->
@@ -597,9 +597,10 @@ async function loadEmitters(){ const d=await api('/api/emitters');lastEob=d.emit
     `<tr style="cursor:pointer" data-f="${e.freq_mhz}"><td>${e.freq_mhz.toFixed(4)}</td><td>${esc(e.itu||'—')}</td><td>${esc(e.guess||'—')}</td><td>${e.max_power_db??'—'}</td><td>${e.count}</td></tr>`));
   tb.querySelectorAll('tr[data-f]').forEach(tr=>tr.onclick=()=>openPeakDrawer(tr.dataset.f)); }
 async function loadSightings(){ const d=await api('/api/sightings'),tb=$('#sightTbl tbody');tb.innerHTML='';
-  if(!d.sightings.length){tb.innerHTML='<tr><td colspan=4 class=muted>No sightings — decode with `--track`.</td></tr>';return;}
-  d.sightings.forEach(s=>tb.insertAdjacentHTML('beforeend',
-    `<tr><td>${esc(s.kind)}</td><td>${esc(s.id)}</td><td>${s.count}</td><td>${s.freq_mhz?(+s.freq_mhz).toFixed(3):'—'}</td></tr>`)); }
+  if(!d.sightings.length){tb.innerHTML='<tr><td colspan=6 class=muted>No sightings — decode/scan with `--track`.</td></tr>';return;}
+  d.sightings.forEach(s=>{ const rssi=s.rssi_dbm!=null?(s.rssi_dbm.toFixed(0)+(s.rssi_best!=null&&s.rssi_best!==s.rssi_dbm?'/'+s.rssi_best.toFixed(0):'')):'—';
+    tb.insertAdjacentHTML('beforeend',
+    `<tr><td>${esc(s.kind)}</td><td>${esc(s.id)}</td><td class=muted>${esc(s.label||'—')}</td><td>${rssi}</td><td>${s.count}</td><td>${s.freq_mhz?(+s.freq_mhz).toFixed(3):'—'}</td></tr>`); }); }
 
 // ---- Wi-Fi / BLE panels ----
 function findingsHtml(list, cleanMsg){

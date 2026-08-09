@@ -42,6 +42,22 @@ rfhound ble scan --seconds 12 --json
 rfhound ble scan --simulate
 ```
 
+## Track a signal's RSSI over time
+
+`--track` links each scan's RSSI to its identifier in the sightings log — Wi-Fi
+by BSSID (with the SSID as the label), BLE by address (with the device name),
+alongside decoded IDs (ICAO/MMSI/…). It keeps the **last** and **strongest-seen**
+RSSI and a count, so you can watch a named signal come and go:
+
+```bash
+rfhound wifi scan --track          # log APs (BSSID + SSID + RSSI)
+rfhound ble scan --track           # log devices (address + name + RSSI)
+rfhound track list                 # Kind · ID · Label · dBm(last/best) · Count · Last seen
+rfhound track show HomeNet
+```
+
+The dashboard **Sightings** panel shows the same label + dBm.
+
 ## Locate a signal by RSSI
 
 RSSI is a proximity cue for **any** source. Two ways to use it:

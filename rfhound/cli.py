@@ -601,8 +601,10 @@ def cmd_track(args: argparse.Namespace, cfg: Config) -> int:
             console.warn(f"No sightings for id '{args.id}'.")
             return 1
         for s in matches:
-            console.print_(f"{s.kind}:{s.id}  count={s.count}  "
-                           f"freq={s.freq_mhz or '?'} MHz  note={s.note}")
+            console.print_(f"{s.kind}:{s.id}  {s.label or s.note}  count={s.count}  "
+                           f"freq={s.freq_mhz or '?'} MHz")
+            if s.rssi_dbm is not None:
+                console.print_(f"  RSSI: last {s.rssi_dbm:.0f} dBm · best {s.rssi_best:.0f} dBm")
             console.print_(f"  first: {time.ctime(s.first_seen)}  last: {time.ctime(s.last_seen)}")
             if s.extra:
                 console.print_(f"  extra: {s.extra}")
@@ -612,11 +614,18 @@ def cmd_track(args: argparse.Namespace, cfg: Config) -> int:
     if not items:
         console.warn("No sightings yet. Decode with --track, or 'rfhound track add <kind> <id>'.")
         return 0
-    rows = [[s.kind, s.id, str(s.count), f"{s.freq_mhz:.3f}" if s.freq_mhz else "—",
-             time.strftime("%m-%d %H:%M", time.localtime(s.last_seen)),
-             (s.extra.get("model") or s.note or "")] for s in items[:args.top]]
+
+    def _rssi(s):
+        if s.rssi_dbm is None:
+            return "—"
+        best = f"/{s.rssi_best:.0f}" if s.rssi_best is not None and s.rssi_best != s.rssi_dbm else ""
+        return f"{s.rssi_dbm:.0f}{best}"
+    rows = [[s.kind, s.id, s.label or (s.extra.get("model") or s.note or "—"), str(s.count),
+             _rssi(s), f"{s.freq_mhz:.3f}" if s.freq_mhz else "—",
+             time.strftime("%m-%d %H:%M", time.localtime(s.last_seen))]
+            for s in items[:args.top]]
     console.table(f"Sightings ({len(items)} unique IDs)",
-                  ["Kind", "ID", "Count", "Freq MHz", "Last seen", "Model/note"], rows)
+                  ["Kind", "ID", "Label", "Count", "dBm(last/best)", "Freq", "Last seen"], rows)
     return 0
 
 
@@ -1549,6 +1558,11 @@ def cmd_wifi(args: argparse.Namespace, cfg: Config) -> int:
                             f"{', '.join(map(str, r.recommended))}  ·  {r.detail}")
         return 0
 
+    if getattr(args, "track", False):
+        from .modules import sightings
+        store = sightings.SightingsStore()
+        sightings.ingest_wifi(store, aps)
+        console.info(f"Tracked {len(aps)} AP(s) by BSSID — see 'rfhound track list wifi'.")
     findings = wifi.analyze_wifi(aps) if args.analyze else []
     if args.json:
         console.raw(json.dumps({
@@ -1589,6 +1603,11 @@ def cmd_ble(args: argparse.Namespace, cfg: Config) -> int:
             console.error(f"BLE scan failed: {exc}")
             return 2
     from .modules import oui
+    if getattr(args, "track", False):
+        from .modules import sightings
+        store = sightings.SightingsStore()
+        sightings.ingest_ble(store, devices)
+        console.info(f"Tracked {len(devices)} device(s) by address — see 'rfhound track list ble'.")
     findings = ble.analyze_ble(devices) if args.analyze else []
     if args.json:
         console.raw(json.dumps({
@@ -2132,6 +2151,8 @@ def build_parser() -> argparse.ArgumentParser:
     wscan.add_argument("--iface", help="Wi-Fi interface (default wlan0 for iw)")
     wscan.add_argument("--analyze", action="store_true",
                        help="Flag evil-twin / open / rogue APs")
+    wscan.add_argument("--track", action="store_true",
+                       help="Record APs (BSSID + SSID + RSSI) to the sightings log")
     wscan.add_argument("--json", action="store_true", help="Machine-readable output")
     wscan.add_argument("--simulate", action="store_true")
     wchan = wsub.add_parser("channels", help="Channel occupancy + least-congested recommendation")
@@ -2139,7 +2160,7 @@ def build_parser() -> argparse.ArgumentParser:
     wchan.add_argument("--json", action="store_true", help="Machine-readable output")
     wchan.add_argument("--simulate", action="store_true")
     pwifi.set_defaults(func=cmd_wifi, wifi_cmd="scan", iface=None, analyze=False,
-                       json=False, simulate=False)
+                       json=False, simulate=False, track=False)
 
     pble = sub.add_parser("ble", help="Passive Bluetooth LE scan (host adapter) with RSSI")
     bsub = pble.add_subparsers(dest="ble_cmd")
@@ -2147,10 +2168,12 @@ def build_parser() -> argparse.ArgumentParser:
     bscan.add_argument("--seconds", type=int, default=8, help="Scan duration")
     bscan.add_argument("--analyze", action="store_true",
                        help="Flag trackers / persistent devices")
+    bscan.add_argument("--track", action="store_true",
+                       help="Record devices (address + name + RSSI) to the sightings log")
     bscan.add_argument("--json", action="store_true", help="Machine-readable output")
     bscan.add_argument("--simulate", action="store_true")
     pble.set_defaults(func=cmd_ble, ble_cmd="scan", seconds=8, analyze=False,
-                      json=False, simulate=False)
+                      json=False, simulate=False, track=False)
 
     phunt = sub.add_parser("hunt", help="Foxhunt a signal by RSSI (hotter/colder + distance)")
     phunt.add_argument("--source", choices=["wifi", "ble", "hackrf"], default="wifi")

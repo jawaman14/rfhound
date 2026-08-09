@@ -32,6 +32,9 @@ class Sighting:
     count: int = 1
     freq_mhz: float | None = None
     note: str = ""
+    label: str = ""                    # human name: SSID / device name / model
+    rssi_dbm: float | None = None      # last observed RSSI
+    rssi_best: float | None = None     # strongest RSSI seen (closest approach)
     extra: dict = field(default_factory=dict)
 
     @property
@@ -71,7 +74,8 @@ class SightingsStore:
         self.path.write_text(json.dumps({k: asdict(v) for k, v in self.data.items()}, indent=2))
 
     def record(self, kind: str, id: str, *, freq_mhz: float | None = None,
-               note: str = "", extra: dict | None = None, when: float | None = None,
+               note: str = "", label: str = "", rssi_dbm: float | None = None,
+               extra: dict | None = None, when: float | None = None,
                save: bool = True) -> Sighting:
         id = str(id)
         now = when if when is not None else time.time()
@@ -84,11 +88,17 @@ class SightingsStore:
                 s.freq_mhz = freq_mhz
             if note:
                 s.note = note
+            if label:
+                s.label = label
+            if rssi_dbm is not None:
+                s.rssi_dbm = rssi_dbm
+                s.rssi_best = rssi_dbm if s.rssi_best is None else max(s.rssi_best, rssi_dbm)
             if extra:
                 s.extra.update(extra)
         else:
             s = Sighting(kind=kind, id=id, first_seen=now, last_seen=now, count=1,
-                         freq_mhz=freq_mhz, note=note, extra=extra or {})
+                         freq_mhz=freq_mhz, note=note, label=label, rssi_dbm=rssi_dbm,
+                         rssi_best=rssi_dbm, extra=extra or {})
             self.data[key] = s
         if save:
             self.save()
@@ -134,4 +144,30 @@ def ingest_json_line(store: SightingsStore, kind: str, line: str,
         return None
     model = obj.get("model") or obj.get("type")
     extra = {"model": model} if model else {}
-    return store.record(kind, ident, freq_mhz=freq_mhz, extra=extra, save=save)
+    rssi = obj.get("rssi") or obj.get("rssi_dbm")
+    label = str(model) if model else ""
+    return store.record(kind, ident, freq_mhz=freq_mhz, label=label,
+                        rssi_dbm=float(rssi) if rssi is not None else None,
+                        extra=extra, save=save)
+
+
+def ingest_wifi(store: SightingsStore, aps, *, save: bool = True) -> int:
+    """Record Wi-Fi APs as sightings keyed by BSSID, with SSID label + RSSI."""
+    for a in aps:
+        store.record("wifi", a.bssid, label=a.ssid, rssi_dbm=a.rssi_dbm,
+                     freq_mhz=a.freq_mhz,
+                     extra={"band": a.band, "channel": a.channel, "security": a.security},
+                     save=False)
+    if save:
+        store.save()
+    return len(aps)
+
+
+def ingest_ble(store: SightingsStore, devices, *, save: bool = True) -> int:
+    """Record BLE devices as sightings keyed by address, with name label + RSSI."""
+    for d in devices:
+        store.record("ble", d.addr, label=d.name, rssi_dbm=d.rssi_dbm,
+                     extra={"kind": d.kind} if d.kind else None, save=False)
+    if save:
+        store.save()
+    return len(devices)

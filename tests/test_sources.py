@@ -1,4 +1,31 @@
-from rfhound.modules import wifi, bluetooth as ble, rssi, sigint, oui
+from rfhound.modules import wifi, bluetooth as ble, rssi, sigint, oui, sightings
+
+
+# --- RSSI linked to identifiers (sightings) ---
+def test_ingest_wifi_links_rssi_to_bssid(tmp_path):
+    store = sightings.SightingsStore(path=tmp_path / "s.json")
+    sightings.ingest_wifi(store, wifi.simulate_wifi())
+    homenet = store.get("wifi", "aa:bb:cc:00:00:01")
+    assert homenet is not None
+    assert homenet.label == "HomeNet"          # SSID linked to the BSSID
+    assert homenet.rssi_dbm == -42.0
+    assert homenet.rssi_best == -42.0
+
+
+def test_ingest_ble_links_rssi_and_name(tmp_path):
+    store = sightings.SightingsStore(path=tmp_path / "s.json")
+    sightings.ingest_ble(store, ble.simulate_ble())
+    tag = store.get("ble", "11:22:33:44:55:66")
+    assert tag.label == "AirTag" and tag.rssi_dbm == -58.0
+
+
+def test_rssi_best_tracks_strongest(tmp_path):
+    store = sightings.SightingsStore(path=tmp_path / "s.json")
+    store.record("wifi", "aa:bb", label="Net", rssi_dbm=-70.0, save=False)
+    store.record("wifi", "aa:bb", label="Net", rssi_dbm=-55.0, save=False)  # closer
+    store.record("wifi", "aa:bb", label="Net", rssi_dbm=-62.0, save=False)
+    s = store.get("wifi", "aa:bb")
+    assert s.rssi_dbm == -62.0 and s.rssi_best == -55.0 and s.count == 3
 
 
 # --- OUI vendor lookup ---

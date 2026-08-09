@@ -21,6 +21,11 @@ All notable changes to RFHound. Versioning is [SemVer](https://semver.org/).
   evil-twin/open findings) and BLE devices (tracker flags), plus a live
   **Foxhunt** RSSI meter (pick a source + target → hotter/colder + range).
   New endpoints: `/api/wifi`, `/api/ble`, `/api/sources`, `/api/hunt`.
+- **RSSI linked to identifiers** — the sightings tracker now records a label
+  (SSID / device name) and RSSI (last + strongest-seen) per identifier.
+  `wifi scan --track` / `ble scan --track` log APs/devices by BSSID/address;
+  `track list` and the dashboard Sightings panel show the label + dBm, so you
+  can watch a named signal's strength over time and foxhunt it.
 - **PDF reports** — `rfhound recon --report survey.pdf` (any `.pdf` path) renders
   a situational-awareness PDF via a dependency-free, pure-stdlib writer (PDF
   base-14 fonts, no reportlab/weasyprint) — keeping the light-core promise.
