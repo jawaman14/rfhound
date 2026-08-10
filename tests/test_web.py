@@ -335,6 +335,33 @@ def test_dashboard_has_source_panels(base_url):
         html = r.read().decode()
     assert 'id="wifi"' in html and 'id="ble"' in html and 'id="foxhunt"' in html
     assert "loadWifi" in html and "loadBle" in html and "toggleHunt" in html
+    assert 'id="presence"' in html and "loadPresence" in html
+
+
+def test_presence_endpoint_simulated(base_url):
+    code, data = get(base_url + "/api/presence?simulate=1")
+    assert code == 200 and "watchlist" in data
+
+
+def test_watch_add_and_remove(cap_url):
+    code, data = _post(cap_url + "/api/watch/add",
+                       {"kind": "ble", "id": "AirTag", "on": "near", "rssi_threshold": -70})
+    assert code == 200
+    assert any(w["id"] == "AirTag" for w in data["watchlist"])
+    # It shows present against the simulated scan.
+    _, pres = get(cap_url + "/api/presence?simulate=1")
+    row = [w for w in pres["watchlist"] if w["id"] == "AirTag"][0]
+    assert row["present"] is True
+    code, data = _post(cap_url + "/api/watch/remove", {"id": "AirTag"})
+    assert code == 200 and data["removed"] == 1
+
+
+def test_watch_add_validation(cap_url):
+    try:
+        _post(cap_url + "/api/watch/add", {"kind": "ble", "id": ""})
+        assert False, "expected 400"
+    except urllib.error.HTTPError as e:
+        assert e.code == 400
 
 
 def test_bookmark_add_requires_token():

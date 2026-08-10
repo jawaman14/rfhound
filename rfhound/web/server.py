@@ -232,6 +232,50 @@ def ble_dict(*, simulate: bool) -> dict:
                           "severity": f.severity} for f in findings]}
 
 
+def presence_dict(cfg: Config, *, simulate: bool) -> dict:
+    from ..modules import presence, wifi
+    from ..modules import bluetooth as ble
+    aps = wifi.simulate_wifi() if simulate else (wifi.scan_wifi() if wifi.available()[0] else [])
+    devices = ble.simulate_ble() if simulate else (ble.scan_ble() if ble.available()[0] else [])
+    obs = presence.observations_from(aps=aps, devices=devices)
+    out = []
+    for w in cfg.watchlist:
+        item = presence.WatchItem(**w)
+        match = next((o for o in obs if presence._matches(item, o)), None)
+        out.append({"kind": item.kind, "id": item.id, "label": item.label, "on": item.on,
+                    "rssi_threshold": item.rssi_threshold, "present": bool(match),
+                    "rssi_dbm": match.get("rssi_dbm") if match else None})
+    return {"watchlist": out}
+
+
+def add_watch(cfg: Config, body: dict) -> dict:
+    ident = str(body.get("id", "")).strip()
+    if not ident:
+        raise ValueError("id is required")
+    kind = str(body.get("kind", "any"))
+    on = body.get("on", "appear")
+    if on not in ("appear", "disappear", "near"):
+        on = "appear"
+    try:
+        thr = float(body.get("rssi_threshold", -60.0))
+    except (TypeError, ValueError):
+        thr = -60.0
+    cfg.watchlist = [w for w in cfg.watchlist
+                     if not (w.get("id") == ident and w.get("kind") == kind)]
+    cfg.watchlist.append({"kind": kind, "id": ident, "on": on, "rssi_threshold": thr,
+                          "label": str(body.get("label", ""))})
+    save_config(cfg)
+    return {"watchlist": cfg.watchlist}
+
+
+def remove_watch(cfg: Config, body: dict) -> dict:
+    ident = str(body.get("id", "")).strip()
+    before = len(cfg.watchlist)
+    cfg.watchlist = [w for w in cfg.watchlist if w.get("id") != ident]
+    save_config(cfg)
+    return {"watchlist": cfg.watchlist, "removed": before - len(cfg.watchlist)}
+
+
 def sources_dict(cfg: Config) -> dict:
     from ..modules import wifi
     from ..modules import bluetooth as ble
@@ -470,6 +514,8 @@ def _make_handler(state: AppState):
                     return self._send_json(hunt_dict(
                         cfg, qs.get("source", ["wifi"])[0], qs.get("target", [""])[0],
                         simulate=sim))
+                if path == "/api/presence":
+                    return self._send_json(presence_dict(cfg, simulate=sim))
                 if path == "/api/sightings":
                     from ..modules import sightings as sightings_mod
                     store = sightings_mod.SightingsStore()
@@ -539,6 +585,10 @@ def _make_handler(state: AppState):
                 if path == "/api/capture":
                     sim = state.wants_simulate(qs) or not device.is_present()
                     return self._send_json(do_capture(state.cfg, body, simulate=sim))
+                if path == "/api/watch/add":
+                    return self._send_json(add_watch(state.cfg, body))
+                if path == "/api/watch/remove":
+                    return self._send_json(remove_watch(state.cfg, body))
                 return self._send_json({"error": "not found", "path": path}, code=404)
             except ValueError as exc:
                 return self._send_json({"error": str(exc)}, code=400)

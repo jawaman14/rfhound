@@ -173,6 +173,7 @@
       <a href="#wifi">📶 Wi-Fi</a>
       <a href="#ble">🔵 Bluetooth</a>
       <a href="#foxhunt">🎯 Foxhunt</a>
+      <a href="#presence">🚨 Presence</a>
       <a href="#bands">📚 Knowledge base</a>
       <a href="#system">⚙️ System</a>
     </nav>
@@ -338,6 +339,24 @@
           <span class="smeter-val" id="huntVal">—</span>
         </div>
         <div class="muted" id="huntTrend" style="text-align:center;font-weight:700"></div>
+      </div>
+
+      <!-- Presence / geofence -->
+      <div class="card section" id="presence">
+        <h2>Presence — watchlist <span class="exp"><button id="presRefresh">⟳</button></span></h2>
+        <div class="scroll"><table id="presTbl"><thead><tr><th>Kind</th><th>ID</th><th>Label</th><th>On</th><th>Status</th><th>dBm</th><th></th></tr></thead><tbody></tbody></table></div>
+        <div class="bm-add">
+          <select id="watchKind" style="background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:7px;padding:6px">
+            <option value="ble">BLE</option><option value="wifi">Wi-Fi</option><option value="any">Any</option>
+          </select>
+          <input type="text" id="watchId" placeholder="BSSID / addr / SSID / name">
+          <select id="watchOn" style="background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:7px;padding:6px">
+            <option value="appear">appear</option><option value="disappear">disappear</option><option value="near">near</option>
+          </select>
+          <input type="number" id="watchRssi" placeholder="dBm" value="-60" style="width:70px">
+          <button class="mini" id="watchAddBtn">Watch</button>
+        </div>
+        <div class="muted" id="presMsg" style="margin-top:6px"></div>
       </div>
 
       <!-- Bookmarks -->
@@ -635,6 +654,7 @@ async function loadBle(){ try{
 let huntTimer=null, huntSeries=[], huntPeakDbm=-120;
 function huntPct(dbm){ return Math.max(2,Math.min(100,(dbm+90)/60*100)); }
 function huntSetTarget(src,t){ $('#huntSource').value=src; $('#huntTarget').value=t;
+  if(src==='wifi'||src==='ble'){ $('#watchKind').value=src; $('#watchId').value=t; }
   document.getElementById('foxhunt').scrollIntoView({behavior:'smooth',block:'center'}); }
 async function huntOnce(){
   try{ const src=$('#huntSource').value, tgt=$('#huntTarget').value;
@@ -655,6 +675,22 @@ async function huntOnce(){
 function toggleHunt(){ const btn=$('#huntBtn');
   if(huntTimer){ clearInterval(huntTimer); huntTimer=null; btn.textContent='Start'; return; }
   huntSeries=[]; huntPeakDbm=-120; btn.textContent='Stop'; huntOnce(); huntTimer=setInterval(huntOnce,2000); }
+
+// ---- presence / geofence ----
+async function loadPresence(){ try{
+  const d=await api(`/api/presence?simulate=${sim()}`), tb=$('#presTbl tbody'); tb.innerHTML='';
+  if(!d.watchlist.length){ tb.innerHTML='<tr><td colspan=7 class=muted>No watches — add one below, or click a scanned AP/device.</td></tr>'; return; }
+  d.watchlist.forEach(w=>tb.insertAdjacentHTML('beforeend',
+    `<tr><td>${esc(w.kind)}</td><td>${esc(w.id)}</td><td class=muted>${esc(w.label||'—')}</td><td>${esc(w.on)}</td><td>${w.present?'<span class=clean>present</span>':'<span class=muted>absent</span>'}</td><td>${w.rssi_dbm!=null?w.rssi_dbm.toFixed(0):'—'}</td><td><button class="bm-del" data-id="${esc(w.id)}" title="Remove">✕</button></td></tr>`));
+  tb.querySelectorAll('.bm-del').forEach(x=>x.onclick=()=>removeWatch(x.dataset.id));
+}catch(e){console.error(e);} }
+function presMsg(t,bad){const e=$('#presMsg');e.textContent=t;e.style.color=bad?'var(--bad)':'var(--dim)';if(t)setTimeout(()=>{e.textContent='';},2500);}
+async function addWatch(){ const id=$('#watchId').value.trim();
+  if(!id){presMsg('Enter an identifier.',true);return;}
+  try{ await post('/api/watch/add',{kind:$('#watchKind').value,id,on:$('#watchOn').value,rssi_threshold:parseFloat($('#watchRssi').value)});
+    $('#watchId').value=''; loadPresence(); presMsg('Watching “'+id+'”.'); }
+  catch(e){ presMsg('Error: '+e.message,true); } }
+async function removeWatch(id){ try{ await post('/api/watch/remove',{id}); loadPresence(); presMsg('Removed “'+id+'”.'); }catch(e){presMsg('Error: '+e.message,true);} }
 
 // ---- export ----
 let lastSweep=null,lastRecon=null;
@@ -733,6 +769,7 @@ $('#bmNote').addEventListener('keydown',e=>{if(e.key==='Enter')addBookmark();});
 $('#capBtn').onclick=doCapture;$('#recRefresh').onclick=loadRecordings;
 $('#eobRefresh').onclick=loadEmitters;$('#sightRefresh').onclick=loadSightings;$('#expEobCsv').onclick=exportEob;
 $('#wifiRefresh').onclick=loadWifi;$('#bleRefresh').onclick=loadBle;$('#huntBtn').onclick=toggleHunt;
+$('#presRefresh').onclick=loadPresence;$('#watchAddBtn').onclick=addWatch;
 $('#expPeaksCsv').onclick=()=>exportPeaks('csv');$('#expPeaksJson').onclick=()=>exportPeaks('json');
 $('#expReconCsv').onclick=()=>exportRecon('csv');$('#expReconJson').onclick=()=>exportRecon('json');
 $('#expBandsCsv').onclick=()=>exportBands('csv');$('#expBandsJson').onclick=()=>exportBands('json');
@@ -742,7 +779,7 @@ window.addEventListener('resize',()=>{drawWaterfall();if(lastSpec)drawSpectrum(l
 initTheme();initWaterfallCtl();initRx();
 loadStatus().then(loadBands).then(loadBookmarks).then(doSweep).then(doRecon)
   .then(loadRecordings).then(loadEmitters).then(loadSightings)
-  .then(loadWifi).then(loadBle).then(refreshKpis).catch(e=>console.error(e));
+  .then(loadWifi).then(loadBle).then(loadPresence).then(refreshKpis).catch(e=>console.error(e));
 </script>
 </body>
 </html>
