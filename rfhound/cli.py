@@ -1751,6 +1751,54 @@ def cmd_hunt(args: argparse.Namespace, cfg: Config) -> int:
     return 0
 
 
+def cmd_watch(args: argparse.Namespace, cfg: Config) -> int:
+    from .modules import presence
+    sub = args.watch_cmd
+    if sub == "add":
+        cfg.watchlist = [w for w in cfg.watchlist
+                         if not (w.get("id") == args.id and w.get("kind") == args.kind)]
+        cfg.watchlist.append({"kind": args.kind, "id": args.id, "on": args.on,
+                              "rssi_threshold": args.rssi, "label": args.label or ""})
+        save_config(cfg)
+        console.success(f"Watching {args.kind}:{args.id} (on {args.on}"
+                        + (f", ≥{args.rssi:.0f} dBm" if args.on == 'near' else "") + ").")
+        return 0
+    if sub == "remove":
+        before = len(cfg.watchlist)
+        cfg.watchlist = [w for w in cfg.watchlist if w.get("id") != args.id]
+        save_config(cfg)
+        console.success(f"Removed {before - len(cfg.watchlist)} watch item(s).")
+        return 0
+    if sub == "check":
+        from .modules import wifi
+        from .modules import bluetooth as ble
+        sim = args.simulate or cfg.simulate_mode
+        aps = wifi.simulate_wifi() if sim else (wifi.scan_wifi() if wifi.available()[0] else [])
+        devices = ble.simulate_ble() if sim else (ble.scan_ble() if ble.available()[0] else [])
+        obs = presence.observations_from(aps=aps, devices=devices)
+        watch = [presence.WatchItem(**w) for w in cfg.watchlist]
+        if not watch:
+            console.warn("Empty watchlist. Add one: rfhound watch add ble AirTag --on near")
+            return 0
+        console.rule("Presence check" + (" · SIMULATED" if sim else ""))
+        rows = []
+        for item in watch:
+            match = next((o for o in obs if presence._matches(item, o)), None)
+            rssi = match.get("rssi_dbm") if match else None
+            rows.append([item.kind, item.id, item.label or "—", item.on,
+                         "present" if match else "absent",
+                         f"{rssi:.0f}" if rssi is not None else "—"])
+        console.table("Watchlist presence", ["Kind", "ID", "Label", "On", "Status", "dBm"], rows)
+        return 0
+    if not cfg.watchlist:
+        console.warn("No watch items. Add one: rfhound watch add ble AirTag --on near")
+        return 0
+    rows = [[w.get("kind"), w.get("id"), w.get("label", "") or "—", w.get("on", "appear"),
+             f"{w.get('rssi_threshold', -60)}"] for w in cfg.watchlist]
+    console.table("Presence watchlist", ["Kind", "ID", "Label", "On", "RSSI≥"], rows)
+    return 0
+
+
 def cmd_menu(args: argparse.Namespace, cfg: Config) -> int:
     from .menu import run_menu
     return run_menu(cfg)
@@ -2087,7 +2135,7 @@ def build_parser() -> argparse.ArgumentParser:
     auadd = ausub.add_parser("add", help="Define an automation")
     auadd.add_argument("name")
     auadd.add_argument("task", choices=["recon", "monitor", "drone", "imsi", "hop", "sweep",
-                                        "gnss", "emitters", "wifi", "ble"])
+                                        "gnss", "emitters", "wifi", "ble", "presence"])
     auadd.add_argument("--interval", type=int, default=60, help="Run every N seconds")
     auadd.add_argument("--start", type=float, help="Start MHz (monitor/sweep/emitters)")
     auadd.add_argument("--stop", type=float, help="Stop MHz (monitor/sweep/emitters)")
@@ -2199,6 +2247,23 @@ def build_parser() -> argparse.ArgumentParser:
                        help="Path-loss exponent (2 free space, 2.5-4 indoors)")
     phunt.add_argument("--simulate", action="store_true")
     phunt.set_defaults(func=cmd_hunt)
+
+    pwatch = sub.add_parser("watch", help="Presence/geofence: alert when an identifier appears/leaves")
+    wtsub = pwatch.add_subparsers(dest="watch_cmd")
+    wtadd = wtsub.add_parser("add", help="Watch an identifier (BSSID/addr/SSID/name)")
+    wtadd.add_argument("kind", choices=["wifi", "ble", "any"])
+    wtadd.add_argument("id", help="BSSID / address / SSID / name / decoded ID")
+    wtadd.add_argument("--on", choices=["appear", "disappear", "near"], default="appear")
+    wtadd.add_argument("--rssi", type=float, default=-60.0,
+                       help="For --on near: proximity threshold (dBm)")
+    wtadd.add_argument("--label", help="Friendly name for alerts")
+    wtrm = wtsub.add_parser("remove", help="Stop watching an id")
+    wtrm.add_argument("id")
+    wtck = wtsub.add_parser("check", help="Show current presence of the watchlist")
+    wtck.add_argument("--simulate", action="store_true")
+    wtsub.add_parser("list", help="List the watchlist")
+    pwatch.set_defaults(func=cmd_watch, watch_cmd="list", id=None, kind="any", on="appear",
+                        rssi=-60.0, label=None, simulate=False)
 
     pcfg = sub.add_parser("config", help="Show / init configuration")
     csub = pcfg.add_subparsers(dest="config_cmd")

@@ -58,6 +58,29 @@ rfhound track show HomeNet
 
 The dashboard **Sightings** panel shows the same label + dBm.
 
+## Presence / geofence alerts — `watch`
+
+Watch a specific identifier and get told when it **appears**, **disappears**, or
+comes **near** (crosses an RSSI threshold). Great for spotting an unwanted
+tracker near you, a device entering/leaving a site, or a known AP vanishing.
+
+```bash
+rfhound watch add ble AirTag --on near --rssi -70   # alert when an AirTag is close
+rfhound watch add wifi HomeNet --on disappear       # alert if your AP drops
+rfhound watch list
+rfhound watch check --simulate                      # current presence of the watchlist
+```
+
+Run it continuously as an automation (with webhook/email/NDJSON alerting):
+
+```bash
+rfhound automate add geofence presence --interval 30 --email me@example.com
+rfhound automate run
+```
+
+Transitions fire once (appear/disappear are edge-triggered); `near` uses the
+RSSI threshold. Matches by BSSID/address **or** by SSID/name substring.
+
 ## Locate a signal by RSSI
 
 RSSI is a proximity cue for **any** source. Two ways to use it:

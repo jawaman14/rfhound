@@ -27,7 +27,7 @@ from .defense import monitor_interference
 
 
 TASKS = ("recon", "monitor", "drone", "imsi", "hop", "sweep", "gnss", "emitters",
-         "wifi", "ble")
+         "wifi", "ble", "presence")
 ALERT_MODES = ("threat", "always", "change")
 
 
@@ -206,11 +206,42 @@ def _task_ble(cfg, params, simulate, prev) -> AutoResult:
                       {"seen": [d.addr for d in devices], "findings": kinds})
 
 
+def _task_presence(cfg, params, simulate, prev) -> AutoResult:
+    """Watch the presence watchlist; alert on appear/disappear/near transitions."""
+    from . import presence, wifi
+    from . import bluetooth as ble
+    watch = [w if isinstance(w, presence.WatchItem) else presence.WatchItem(**w)
+             for w in cfg.watchlist]
+    if not watch:
+        return AutoResult(False, "presence: empty watchlist (rfhound watch add ...)", {})
+    aps, devices = [], []
+    if simulate:
+        aps, devices = wifi.simulate_wifi(), ble.simulate_ble()
+    else:
+        if wifi.available()[0]:
+            try:
+                aps = wifi.scan_wifi(iface=params.get("iface"))
+            except Exception:  # noqa: BLE001
+                pass
+        if ble.available()[0]:
+            try:
+                devices = ble.scan_ble(seconds=int(params.get("seconds", 8)))
+            except Exception:  # noqa: BLE001
+                pass
+    obs = presence.observations_from(aps=aps, devices=devices)
+    findings, present = presence.check_presence(watch, obs, prev_present=set(prev) if prev else set())
+    summary = f"{len(watch)} watched, {len(present)} present"
+    if findings:
+        summary += "; " + ", ".join(f"{f.event}:{f.label}" for f in findings)
+    return AutoResult(bool(findings), summary,
+                      {"seen": sorted(present), "events": [f.event for f in findings]})
+
+
 _RUNNERS = {
     "recon": _task_recon, "monitor": _task_monitor, "drone": _task_drone,
     "imsi": _task_imsi, "hop": _task_hop, "sweep": _task_sweep,
     "gnss": _task_gnss, "emitters": _task_emitters,
-    "wifi": _task_wifi, "ble": _task_ble,
+    "wifi": _task_wifi, "ble": _task_ble, "presence": _task_presence,
 }
 
 

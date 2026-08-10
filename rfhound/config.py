@@ -84,6 +84,9 @@ class Config:
     # Automations: [{name, task, interval_s, params, alert_on, webhook, email, enabled}].
     automations: list = field(default_factory=list)
 
+    # Presence watchlist: [{kind, id, on, rssi_threshold, label}].
+    watchlist: list = field(default_factory=list)
+
     # --- SMTP email alerting (optional; alongside webhooks) -----------------
     smtp_host: str = ""
     smtp_port: int = 587

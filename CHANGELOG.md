@@ -31,6 +31,10 @@ All notable changes to RFHound. Versioning is [SemVer](https://semver.org/).
   Sightings panel an inline SVG trend line (approach → recede at a glance).
 - **KML export** for geolocation fixes (`sigint locate … --kml FILE`) — the
   emitter fix + receiver placemarks for Google Earth, alongside `--geojson`.
+- **Presence / geofence alerts** (`watch`) — watch an identifier (BSSID/SSID,
+  BLE address/name, decoded ID) and alert when it appears, disappears, or comes
+  near (RSSI threshold). `watch add/list/remove/check` + a `presence` automation
+  task for continuous edge-triggered alerting via webhook/email/NDJSON.
 - **PDF reports** — `rfhound recon --report survey.pdf` (any `.pdf` path) renders
   a situational-awareness PDF via a dependency-free, pure-stdlib writer (PDF
   base-14 fonts, no reportlab/weasyprint) — keeping the light-core promise.
