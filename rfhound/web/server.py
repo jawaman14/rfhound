@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hmac
 import json
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from http.cookies import SimpleCookie
 from pathlib import Path
@@ -46,6 +47,38 @@ def _band_dict(b: bandplan.Band) -> dict:
         "description": b.description,
         "tags": list(b.tags),
     }
+
+
+def metrics_text(state) -> str:
+    """Prometheus text-format exposition of basic RFHound metrics.
+
+    Cheap, receive-only gauges/counters — no scanning is triggered by a scrape.
+    Suitable for a Prometheus scrape or any monitoring poller.
+    """
+    cfg = state.cfg
+    installed = sum(1 for _, ok, _ in proc.tool_status() if ok)
+    total_tools = len(proc.KNOWN_TOOLS)
+    device_present = 1 if device.is_present() else 0
+    uptime = max(0.0, time.time() - state.started_at)
+
+    def line(name, value, help_text, mtype="gauge"):
+        return (f"# HELP {name} {help_text}\n# TYPE {name} {mtype}\n{name} {value}\n")
+
+    out = [
+        line("rfhound_up", 1, "Always 1 when the dashboard is serving."),
+        line("rfhound_uptime_seconds", f"{uptime:.0f}", "Seconds since the server started."),
+        line("rfhound_requests_total", state.request_count,
+             "Total HTTP requests served.", "counter"),
+        line("rfhound_device_present", device_present, "1 if a HackRF is detected."),
+        line("rfhound_tools_installed", installed, "External tools found on PATH."),
+        line("rfhound_tools_total", total_tools, "External tools RFHound knows about."),
+        line("rfhound_bookmarks", len(cfg.bookmarks), "Saved frequency bookmarks."),
+        line("rfhound_watchlist", len(cfg.watchlist), "Presence watchlist size."),
+        line("rfhound_automations", len(cfg.automations), "Configured automation tasks."),
+        line("rfhound_tx_enabled", 1 if cfg.tx_enabled else 0,
+             "1 if transmit is enabled (should be 0 on receive-only nodes)."),
+    ]
+    return "".join(out)
 
 
 def status_dict(cfg: Config) -> dict:
@@ -436,6 +469,8 @@ class AppState:
         self.cfg = cfg
         self.force_simulate = force_simulate
         self.token = token or None  # empty string => no auth
+        self.started_at = time.time()
+        self.request_count = 0
 
     def wants_simulate(self, qs: dict) -> bool:
         if self.force_simulate:
@@ -474,6 +509,15 @@ def _make_handler(state: AppState):
             body = json.dumps(obj).encode()
             self.send_response(code)
             self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self._security_headers()
+            self.end_headers()
+            self.wfile.write(body)
+
+        def _send_text(self, text, code=200, ctype="text/plain; charset=utf-8"):
+            body = text.encode()
+            self.send_response(code)
+            self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(body)))
             self._security_headers()
             self.end_headers()
@@ -518,11 +562,15 @@ def _make_handler(state: AppState):
             qs = parse_qs(parsed.query)
             sim = state.wants_simulate(qs)
             cfg = state.cfg
-            # Gate the data API behind the token when one is configured. The
-            # HTML shell itself carries no data, so it's always served.
-            if path.startswith("/api/") and not state.token_ok(self._presented_token(qs)):
+            state.request_count += 1
+            # Gate the data API + metrics behind the token when one is configured.
+            # The HTML shell itself carries no data, so it's always served.
+            gated = path.startswith("/api/") or path == "/metrics"
+            if gated and not state.token_ok(self._presented_token(qs)):
                 return self._send_json({"error": "unauthorized"}, code=401)
             try:
+                if path == "/metrics":
+                    return self._send_text(metrics_text(state))
                 if path in ("/", "/index.html"):
                     return self._send_html()
                 if path == "/favicon.ico":

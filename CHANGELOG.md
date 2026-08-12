@@ -80,6 +80,13 @@ All notable changes to RFHound. Versioning is [SemVer](https://semver.org/).
   named presets of the editable settings (e.g. an `airband` vs `ism433` rig
   setup) under `~/.config/rfhound/profiles/`; loading re-validates every value.
   Also reachable from the interactive Settings menu.
+- **Contact proximity** — `contacts --near LAT,LON` sorts contacts nearest-first
+  and shows range (km) from a reference point (haversine); the distance is
+  included in `--json` output.
+- **Prometheus `/metrics` endpoint** — the dashboard exposes receive-only gauges
+  and counters (uptime, requests, device present, tools installed, bookmark /
+  watchlist / automation counts, tx-enabled) in Prometheus text format for
+  monitoring. Token-gated like the rest of the API; a scrape triggers no scanning.
 
 ## [1.3.0] — 2026-08-08
 

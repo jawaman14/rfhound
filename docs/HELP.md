@@ -87,7 +87,7 @@ rfhound --simulate web --open   # launch the dashboard with no hardware
 | `config profile save\|load\|list\|delete <name>` | Named presets of the settings |
 | `doctor [--self-test\|--rf\|--json]` | Environment check + deep self-test diagnostics |
 | `sources [--scan] [--simulate]` | List / parallel-scan the passive RF sources |
-| `contacts [--simulate --json --geojson F --kml F]` | ADS-B/AIS contacts + map export |
+| `contacts [--simulate --json --near LAT,LON --geojson F --kml F]` | ADS-B/AIS contacts, proximity + map export |
 
 ## The two frequency helpers (new in 1.0)
 

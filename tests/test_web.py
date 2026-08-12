@@ -343,6 +343,40 @@ def test_presence_endpoint_simulated(base_url):
     assert code == 200 and "watchlist" in data
 
 
+def _get_text(url):
+    with urllib.request.urlopen(url, timeout=5) as r:
+        return r.status, r.read().decode()
+
+
+def test_metrics_endpoint(base_url):
+    code, text = _get_text(base_url + "/metrics")
+    assert code == 200
+    assert "rfhound_up 1" in text
+    assert "# TYPE rfhound_requests_total counter" in text
+    assert "rfhound_tools_total" in text
+
+
+def test_metrics_requires_token_when_set():
+    state = web.build_app_state(Config(), force_simulate=True, token="s3cr3t")
+    handler = web._make_handler(state)
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    port = httpd.server_address[1]
+    t = threading.Thread(target=httpd.serve_forever, daemon=True)
+    t.start()
+    try:
+        base = f"http://127.0.0.1:{port}"
+        try:
+            _get_text(base + "/metrics")
+            assert False, "expected 401"
+        except urllib.error.HTTPError as e:
+            assert e.code == 401
+        code, text = _get_text(base + "/metrics?token=s3cr3t")
+        assert code == 200 and "rfhound_up 1" in text
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+
 def test_diagnostics_endpoint(base_url):
     code, data = get(base_url + "/api/diagnostics")
     assert code == 200

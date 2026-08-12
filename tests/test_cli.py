@@ -242,3 +242,17 @@ def test_config_profile_cli_roundtrip(tmp_path, monkeypatch, capsys):
     assert capsys.readouterr().out.strip() == "40"
     assert run(["config", "profile", "list"]) == 0
     assert "myp" in capsys.readouterr().out
+
+
+def test_contacts_near_distance(capsys):
+    rc = run(["--simulate", "contacts", "--near", "51.5,-0.12", "--json"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    data = json.loads(out)
+    dists = [c["distance_km"] for c in data["contacts"]]
+    assert dists == sorted(dists)          # nearest-first
+    assert data["contacts"][0]["id"] == "abc123"
+
+
+def test_contacts_near_bad_input():
+    assert run(["--simulate", "contacts", "--near", "notacoord"]) == 2

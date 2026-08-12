@@ -313,6 +313,12 @@ def contacts_from_messages(*, adsb=None, ais=None) -> list:
     return sorted(out, key=lambda c: c.rssi_dbm, reverse=True)
 
 
+def contacts_near(contacts: list, lat: float, lon: float) -> list:
+    """Return ``[(contact, distance_km)]`` sorted nearest-first from (lat, lon)."""
+    out = [(c, _haversine_km(lat, lon, c.lat, c.lon)) for c in contacts]
+    return sorted(out, key=lambda t: t[1])
+
+
 def simulate_contacts() -> list:
     """Synthetic aircraft + vessel contacts (with RSSI) for the map."""
     adsb = [

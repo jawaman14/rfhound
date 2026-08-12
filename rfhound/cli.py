@@ -1821,8 +1821,24 @@ def cmd_contacts(args: argparse.Namespace, cfg: Config) -> int:
     from .modules import geo
     sim = args.simulate or cfg.simulate_mode
     contacts = intel.simulate_contacts() if sim else intel.contacts_from_messages()
+
+    ref = None
+    if getattr(args, "near", None):
+        try:
+            lat_s, lon_s = args.near.split(",")
+            ref = (float(lat_s), float(lon_s))
+        except ValueError:
+            console.error("--near expects LAT,LON (e.g. --near 51.5,-0.12)")
+            return 2
+        pairs = intel.contacts_near(contacts, ref[0], ref[1])
+        contacts = [c for c, _ in pairs]
+        dist_km = {id(c): d for c, d in pairs}
+
     points = [{"kind": c.kind, "id": c.id, "label": c.label, "lat": c.lat, "lon": c.lon,
                "rssi_dbm": c.rssi_dbm, "detail": c.detail} for c in contacts]
+    if ref:
+        for p, c in zip(points, contacts):
+            p["distance_km"] = round(dist_km[id(c)], 3)
 
     if args.json:
         console.raw(json.dumps({"simulated": sim, "contacts": points}, indent=2))
@@ -1831,11 +1847,18 @@ def cmd_contacts(args: argparse.Namespace, cfg: Config) -> int:
         if not contacts:
             console.warn("No contacts. Use --simulate to demo, or feed a live decoder.")
         else:
-            rows = [["✈ air" if c.kind == "aircraft" else "⚓ sea", c.id, c.label or "—",
-                     f"{c.lat:.3f}", f"{c.lon:.3f}", f"{c.rssi_dbm:.0f}", c.detail or "—"]
-                    for c in contacts]
-            console.table(f"Contacts ({len(contacts)})",
-                          ["Type", "ID", "Label", "Lat", "Lon", "dBm", "Info"], rows)
+            cols = ["Type", "ID", "Label", "Lat", "Lon", "dBm", "Info"]
+            if ref:
+                cols.append("Dist km")
+            rows = []
+            for c in contacts:
+                row = ["✈ air" if c.kind == "aircraft" else "⚓ sea", c.id, c.label or "—",
+                       f"{c.lat:.3f}", f"{c.lon:.3f}", f"{c.rssi_dbm:.0f}", c.detail or "—"]
+                if ref:
+                    row.append(f"{dist_km[id(c)]:.1f}")
+                rows.append(row)
+            console.table(f"Contacts ({len(contacts)})"
+                          + (f" · from {ref[0]:.3f},{ref[1]:.3f}" if ref else ""), cols, rows)
 
     if getattr(args, "geojson", None):
         geo.write_geojson(args.geojson, geo.points_geojson(points))
@@ -2384,9 +2407,12 @@ def build_parser() -> argparse.ArgumentParser:
                           help="List ADS-B/AIS contacts (RSSI + position); export GeoJSON/KML")
     pcon.add_argument("--simulate", action="store_true")
     pcon.add_argument("--json", action="store_true")
+    pcon.add_argument("--near", metavar="LAT,LON",
+                      help="Sort by distance from a reference point and show range (km)")
     pcon.add_argument("--geojson", metavar="FILE", help="Write contacts as GeoJSON")
     pcon.add_argument("--kml", metavar="FILE", help="Write contacts as KML (Google Earth)")
-    pcon.set_defaults(func=cmd_contacts, simulate=False, json=False, geojson=None, kml=None)
+    pcon.set_defaults(func=cmd_contacts, simulate=False, json=False, near=None,
+                      geojson=None, kml=None)
 
     pwifi = sub.add_parser("wifi", help="Passive Wi-Fi AP scan (host adapter) with RSSI")
     wsub = pwifi.add_subparsers(dest="wifi_cmd")

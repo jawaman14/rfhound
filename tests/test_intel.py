@@ -67,6 +67,15 @@ def test_simulate_contacts_has_aircraft_and_vessels():
     assert rssis == sorted(rssis, reverse=True)
 
 
+def test_contacts_near_sorted_by_distance():
+    contacts = intel.simulate_contacts()
+    pairs = intel.contacts_near(contacts, 51.5, -0.12)
+    dists = [d for _, d in pairs]
+    assert dists == sorted(dists)              # nearest-first
+    assert pairs[0][0].id == "abc123"          # BAW117 is closest to LHR-ish
+    assert all(d >= 0 for d in dists)
+
+
 def test_contacts_from_messages_keeps_latest_fix_and_defaults_rssi():
     adsb = [
         {"icao": "aa", "t": 0, "lat": 1.0, "lon": 1.0, "alt": 30000},
