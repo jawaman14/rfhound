@@ -54,6 +54,23 @@ All notable changes to RFHound. Versioning is [SemVer](https://semver.org/).
   and plotted on a self-contained lat/lon map on the dashboard, with marker
   colour and size encoding signal strength. New endpoint `/api/contacts`.
   Receive-only: it plots what the receiver heard.
+- **Settings** — a single validated, editable-settings surface (`rfhound.settings`)
+  powering `config set/get/list` (typed, range/step/choice-checked), an
+  interactive **Settings** menu entry, and a dashboard **Settings** panel
+  (`GET /api/config`, `POST /api/config/set`). Change gains, sample rate, output
+  dir, colour, simulate mode, worker count, and more — with the same validation
+  and error messages everywhere. Transmit-safety fields stay behind the gated
+  `tx enable` flow, never a generic setter.
+- **Self-test diagnostics** — `doctor --self-test` (and a menu entry + dashboard
+  **Diagnostics** panel, `GET /api/diagnostics`) actively exercises the
+  environment: Python version, config parse, writable output/config dirs, free
+  disk, optional deps (numpy/rich), the HackRF device, and core tool probes —
+  each with an actionable fix hint and an overall healthy/needs-attention verdict.
+- **Multithreading** — a small `rfhound.parallel` helper (isolated
+  `ThreadPoolExecutor`, per-job error capture) runs independent I/O-bound jobs
+  concurrently. `sources --scan` now scans HackRF + Wi-Fi + BLE in parallel, and
+  the self-test probes tools concurrently; worker count is the `scan_workers`
+  setting. One failing job never sinks the batch — you get its error back.
 
 ## [1.3.0] — 2026-08-08
 

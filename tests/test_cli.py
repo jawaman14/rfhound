@@ -170,3 +170,43 @@ def test_tx_status(capsys):
     out = capsys.readouterr().out
     assert rc == 0
     assert "Transmit" in out
+
+
+def test_config_set_get_persists(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    assert run(["config", "set", "lna_gain", "24"]) == 0
+    capsys.readouterr()
+    assert run(["config", "get", "lna_gain"]) == 0
+    assert capsys.readouterr().out.strip() == "24"
+    # A fresh load sees the persisted value.
+    from rfhound.config import load_config
+    assert load_config().lna_gain == 24
+
+
+def test_config_set_rejects_invalid(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    assert run(["config", "set", "lna_gain", "25"]) == 2      # bad step
+    assert run(["config", "set", "unknownkey", "1"]) == 2     # unknown
+
+
+def test_config_list(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    assert run(["config", "list"]) == 0
+    out = capsys.readouterr().out
+    assert "scan_workers" in out and "lna_gain" in out
+
+
+def test_doctor_self_test_json(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    rc = run(["doctor", "--self-test", "--json"])
+    out = capsys.readouterr().out
+    data = json.loads(out)
+    assert "checks" in data and "summary" in data
+    assert rc in (0, 1)   # 1 only if a hard failure (unlikely in CI)
+
+
+def test_sources_scan_parallel_simulated(capsys):
+    rc = run(["--simulate", "sources", "--scan"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "HackRF" in out and "Wi-Fi" in out and "BLE" in out

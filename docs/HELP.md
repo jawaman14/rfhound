@@ -82,7 +82,10 @@ rfhound --simulate web --open   # launch the dashboard with no hardware
 | `hub [--host --port --token]` | Run the multi-node aggregator |
 | `node --hub URL --id N [--scan recon\|drone\|imsi]` | Push a receiver's findings to a hub |
 | `mods list\|sample` | Manage extension mods/plugins |
-| `config show\|init\|path` | Configuration |
+| `config show\|init\|path\|wizard` | Configuration |
+| `config list\|get <key>\|set <key> <value>` | View / change a validated setting |
+| `doctor [--self-test\|--rf\|--json]` | Environment check + deep self-test diagnostics |
+| `sources [--scan] [--simulate]` | List / parallel-scan the passive RF sources |
 
 ## The two frequency helpers (new in 1.0)
 

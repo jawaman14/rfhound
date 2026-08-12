@@ -95,6 +95,23 @@ def cmd_doctor(args: argparse.Namespace, cfg: Config) -> int:
         for n in fe_mod.GENERAL_NOTES:
             console.print_(f"  • {n}")
         return 0
+    if getattr(args, "self_test", False):
+        from .modules import diagnostics
+        checks = diagnostics.run_diagnostics(cfg)
+        if getattr(args, "json", False):
+            import json
+            console.raw(json.dumps({
+                "checks": [{"name": c.name, "status": c.status, "detail": c.detail,
+                            "hint": c.hint} for c in checks],
+                "summary": diagnostics.summarize(checks)}, indent=2))
+            return 0
+        console.rule("Self-test")
+        rows = [[c.symbol, c.name, c.detail, c.hint or "—"] for c in checks]
+        console.table("Diagnostics", ["", "Check", "Detail", "Fix"], rows)
+        s = diagnostics.summarize(checks)
+        (console.success if s["healthy"] else console.warn)(
+            f"{s['ok']} ok · {s['warn']} warn · {s['fail']} fail")
+        return 0 if s["healthy"] else 1
     if getattr(args, "json", False):
         import json
         from .web.server import status_dict
@@ -1495,11 +1512,49 @@ def _config_wizard(cfg: Config) -> int:
     return 0
 
 
+def _fmt_setting(value) -> str:
+    if isinstance(value, bool):
+        return "on" if value else "off"
+    if value == "" or value is None:
+        return "(unset)"
+    return str(value)
+
+
 def cmd_config(args: argparse.Namespace, cfg: Config) -> int:
     if args.config_cmd == "wizard":
         return _config_wizard(cfg)
     if args.config_cmd == "path":
         console.print_(str(config_path()))
+        return 0
+    if args.config_cmd == "list":
+        from . import settings
+        rows = [[s["key"], s["kind"], _fmt_setting(s["value"]),
+                 s["help"] + (f" {list(s['choices'])}" if s["choices"] else "")]
+                for s in settings.current(cfg)]
+        console.table("Editable settings", ["Key", "Type", "Value", "Description"], rows)
+        console.print_("Change one: rfhound config set <key> <value>")
+        return 0
+    if args.config_cmd == "get":
+        from . import settings
+        try:
+            settings.get_setting(args.key)
+        except KeyError:
+            console.error(f"Unknown setting '{args.key}'. See: rfhound config list")
+            return 2
+        console.print_(_fmt_setting(getattr(cfg, args.key, None)))
+        return 0
+    if args.config_cmd == "set":
+        from . import settings
+        try:
+            value = settings.set_value(cfg, args.key, args.value)
+        except KeyError:
+            console.error(f"Unknown setting '{args.key}'. See: rfhound config list")
+            return 2
+        except ValueError as exc:
+            console.error(f"Invalid value for '{args.key}': {exc}")
+            return 2
+        save_config(cfg)
+        console.success(f"{args.key} = {_fmt_setting(value)}")
         return 0
     if args.config_cmd == "init":
         path = save_config(cfg)
@@ -1660,34 +1715,61 @@ def cmd_sources(args: argparse.Namespace, cfg: Config) -> int:
     bok, bnote = ble.available()
 
     if getattr(args, "scan", False):
+        from . import parallel
         sim = args.simulate or cfg.simulate_mode
         console.rule("Combined source scan" + (" · SIMULATED" if sim else ""))
-        # HackRF spectrum survey.
-        rep = recon_mod.run_recon(cfg, simulate=(sim or not hackrf), progress=False)
-        console.info(f"HackRF: {len(rep.active_findings)}/{len(rep.findings)} bands active"
-                     + (" (sim)" if sim or not hackrf else ""))
-        # Wi-Fi.
-        if wok or sim:
+
+        # Each source is an independent, I/O-bound job — run them concurrently.
+        def _job_hackrf():
+            return recon_mod.run_recon(cfg, simulate=(sim or not hackrf), progress=False)
+
+        def _job_wifi():
+            if not (wok or sim):
+                return None
             aps = wifi.simulate_wifi() if (sim or not wok) else wifi.scan_wifi()
-            wf = wifi.analyze_wifi(aps)
-            console.info(f"Wi-Fi: {len(aps)} APs"
-                         + (f", {len(wf)} finding(s)" if wf else ""))
+            return aps, wifi.analyze_wifi(aps)
+
+        def _job_ble():
+            if not (bok or sim):
+                return None
+            devs = ble.simulate_ble() if (sim or not bok) else ble.scan_ble()
+            return devs, ble.analyze_ble(devs)
+
+        with console.status("Scanning HackRF + Wi-Fi + BLE in parallel…"):
+            res = parallel.run_jobs({"hackrf": _job_hackrf, "wifi": _job_wifi, "ble": _job_ble},
+                                    workers=getattr(cfg, "scan_workers", 4))
+
+        r = res["hackrf"]
+        if r.ok:
+            rep = r.value
+            console.info(f"HackRF: {len(rep.active_findings)}/{len(rep.findings)} bands active"
+                         + (" (sim)" if sim or not hackrf else ""))
+        else:
+            console.error(f"HackRF: scan failed — {r.error}")
+
+        r = res["wifi"]
+        if not r.ok:
+            console.error(f"Wi-Fi: scan failed — {r.error}")
+        elif r.value is None:
+            console.warn(f"Wi-Fi: {wnote}")
+        else:
+            aps, wf = r.value
+            console.info(f"Wi-Fi: {len(aps)} APs" + (f", {len(wf)} finding(s)" if wf else ""))
             for f in wf:
                 if f.severity == "high":
                     console.error(f"  [wifi/{f.severity}] {f.indicator}: {f.detail}")
+
+        r = res["ble"]
+        if not r.ok:
+            console.error(f"BLE: scan failed — {r.error}")
+        elif r.value is None:
+            console.warn(f"BLE: {bnote}")
         else:
-            console.warn(f"Wi-Fi: {wnote}")
-        # BLE.
-        if bok or sim:
-            devs = ble.simulate_ble() if (sim or not bok) else ble.scan_ble()
-            bf = ble.analyze_ble(devs)
-            console.info(f"BLE: {len(devs)} devices"
-                         + (f", {len(bf)} finding(s)" if bf else ""))
+            devs, bf = r.value
+            console.info(f"BLE: {len(devs)} devices" + (f", {len(bf)} finding(s)" if bf else ""))
             for f in bf:
                 if f.severity == "high":
                     console.error(f"  [ble/{f.severity}] {f.indicator}: {f.detail}")
-        else:
-            console.warn(f"BLE: {bnote}")
         return 0
 
     console.rule("RF sources")
@@ -1879,7 +1961,9 @@ def build_parser() -> argparse.ArgumentParser:
     pdoc.add_argument("--rf", action="store_true",
                       help="Show the RF front-end guide (antenna/filter/LNA per band)")
     pdoc.add_argument("--freq", type=float, help="With --rf: recommend for this frequency (MHz)")
-    pdoc.set_defaults(func=cmd_doctor, rf=False, freq=None)
+    pdoc.add_argument("--self-test", dest="self_test", action="store_true",
+                      help="Run deep diagnostics (config, disk, deps, device, tool probes)")
+    pdoc.set_defaults(func=cmd_doctor, rf=False, freq=None, self_test=False)
     sub.add_parser("menu", help="Launch the guided interactive menu").set_defaults(func=cmd_menu)
 
     pw = sub.add_parser("web", help="Launch the browser dashboard + REST API")
@@ -2310,6 +2394,12 @@ def build_parser() -> argparse.ArgumentParser:
     csub.add_parser("init", help="Write a default config file")
     csub.add_parser("wizard", help="Interactive first-run setup")
     csub.add_parser("path", help="Print config file path")
+    csub.add_parser("list", help="List editable settings + current values")
+    cget = csub.add_parser("get", help="Print one setting's value")
+    cget.add_argument("key")
+    cset = csub.add_parser("set", help="Change one setting (validated)")
+    cset.add_argument("key")
+    cset.add_argument("value")
     csmtp = csub.add_parser("smtp", help="Configure SMTP for email alerts")
     csmtp.add_argument("--host")
     csmtp.add_argument("--port", type=int)

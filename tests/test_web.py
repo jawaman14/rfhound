@@ -343,6 +343,33 @@ def test_presence_endpoint_simulated(base_url):
     assert code == 200 and "watchlist" in data
 
 
+def test_diagnostics_endpoint(base_url):
+    code, data = get(base_url + "/api/diagnostics")
+    assert code == 200
+    assert "checks" in data and "summary" in data
+    assert {"ok", "warn", "fail", "healthy"} <= set(data["summary"])
+    assert any(c["name"] == "Python" for c in data["checks"])
+
+
+def test_config_get_and_set(bm_url):
+    code, data = get(bm_url + "/api/config")
+    assert code == 200 and any(s["key"] == "lna_gain" for s in data["settings"])
+    code, data = _post(bm_url + "/api/config/set", {"key": "lna_gain", "value": 24})
+    assert code == 200 and data["value"] == 24
+    lna = [s for s in data["settings"] if s["key"] == "lna_gain"][0]
+    assert lna["value"] == 24
+
+
+def test_config_set_validation(bm_url):
+    for bad in [{"key": "lna_gain", "value": 25}, {"key": "vga_gain", "value": 99},
+                {"key": "nope", "value": 1}]:
+        try:
+            _post(bm_url + "/api/config/set", bad)
+            assert False, "expected 400"
+        except urllib.error.HTTPError as e:
+            assert e.code == 400
+
+
 def test_contacts_endpoint_simulated(base_url):
     code, data = get(base_url + "/api/contacts?simulate=1")
     assert code == 200 and data["simulated"] is True

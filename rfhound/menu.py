@@ -325,7 +325,60 @@ def _menu_ai(cfg: Config) -> None:
 def _menu_doctor(cfg: Config) -> None:
     from .cli import cmd_doctor
     import argparse
-    cmd_doctor(argparse.Namespace(), cfg)
+    cmd_doctor(argparse.Namespace(rf=False, json=False, freq=None, self_test=False), cfg)
+
+
+def _menu_diagnostics(cfg: Config) -> None:
+    from .modules import diagnostics
+    console.rule("Self-test / diagnostics")
+    with console.status("Running diagnostics…"):
+        checks = diagnostics.run_diagnostics(cfg)
+    rows = [[c.symbol, c.name, c.detail, c.hint or "—"] for c in checks]
+    console.table("Diagnostics", ["", "Check", "Detail", "Fix"], rows)
+    s = diagnostics.summarize(checks)
+    (console.success if s["healthy"] else console.warn)(
+        f"{s['ok']} ok · {s['warn']} warn · {s['fail']} fail")
+
+
+def _menu_settings(cfg: Config) -> None:
+    from . import settings
+    while True:
+        console.rule("Settings")
+        items = settings.current(cfg)
+        for i, s in enumerate(items, 1):
+            console.print_(f"  {i:>2}. {s['key']:<20} = {_fmt(s['value'])}   "
+                           f"[dim]{s['help']}[/dim]" if console.have_rich()
+                           else f"  {i:>2}. {s['key']:<20} = {_fmt(s['value'])}   {s['help']}")
+        console.print_(f"  {len(items) + 1:>2}. Back")
+        choice = console.ask("Edit which #", default=str(len(items) + 1)).strip()
+        try:
+            n = int(choice)
+        except ValueError:
+            console.warn("Enter a number.")
+            continue
+        if n == len(items) + 1 or n < 1 or n > len(items):
+            return
+        s = items[n - 1]
+        setting = settings.get_setting(s["key"])
+        if setting.kind == "bool":
+            new = console.confirm(f"{s['key']} — enable?", default=bool(s["value"]))
+        else:
+            prompt = s["key"] + (f" {list(setting.choices)}" if setting.choices else "")
+            new = console.ask(prompt, default=str(s["value"]))
+        try:
+            value = settings.set_value(cfg, s["key"], new)
+            save_config(cfg)
+            console.success(f"{s['key']} = {_fmt(value)}")
+        except (ValueError, KeyError) as exc:
+            console.error(f"Invalid: {exc}")
+
+
+def _fmt(value) -> str:
+    if isinstance(value, bool):
+        return "on" if value else "off"
+    if value == "" or value is None:
+        return "(unset)"
+    return str(value)
 
 
 MENU = [
@@ -341,7 +394,9 @@ MENU = [
     ("Automation console", lambda c, s: _menu_automate(c)),
     ("AI copilot console", lambda c, s: _menu_ai(c)),
     ("Web dashboard", lambda c, s: _menu_web(c)),
+    ("Settings", lambda c, s: _menu_settings(c)),
     ("Environment check (doctor)", lambda c, s: _menu_doctor(c)),
+    ("Self-test / diagnostics", lambda c, s: _menu_diagnostics(c)),
     ("Quit", None),
 ]
 

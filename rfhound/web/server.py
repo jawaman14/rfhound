@@ -248,6 +248,33 @@ def presence_dict(cfg: Config, *, simulate: bool) -> dict:
     return {"watchlist": out}
 
 
+def settings_dict(cfg: Config) -> dict:
+    """The editable settings surface + current values (for a Settings panel)."""
+    from .. import settings
+    return {"settings": settings.current(cfg)}
+
+
+def set_config(cfg: Config, body: dict) -> dict:
+    """Validate and persist one setting from a POST body {key, value}."""
+    from .. import settings
+    key = str(body.get("key", ""))
+    try:
+        value = settings.set_value(cfg, key, body.get("value"))
+    except KeyError:
+        raise ValueError(f"unknown setting '{key}'")
+    save_config(cfg)
+    return {"key": key, "value": value, "settings": settings.current(cfg)}
+
+
+def diagnostics_dict(cfg: Config) -> dict:
+    """Run the self-test diagnostics and return them as JSON."""
+    from ..modules import diagnostics
+    checks = diagnostics.run_diagnostics(cfg)
+    return {"checks": [{"name": c.name, "status": c.status, "detail": c.detail,
+                        "hint": c.hint} for c in checks],
+            "summary": diagnostics.summarize(checks)}
+
+
 def contacts_dict(*, simulate: bool) -> dict:
     """Positioned ADS-B aircraft / AIS vessel contacts (with RSSI) for the map."""
     from ..modules import intel
@@ -531,6 +558,10 @@ def _make_handler(state: AppState):
                     return self._send_json(presence_dict(cfg, simulate=sim))
                 if path == "/api/contacts":
                     return self._send_json(contacts_dict(simulate=sim))
+                if path == "/api/diagnostics":
+                    return self._send_json(diagnostics_dict(cfg))
+                if path == "/api/config":
+                    return self._send_json(settings_dict(cfg))
                 if path == "/api/sightings":
                     from ..modules import sightings as sightings_mod
                     store = sightings_mod.SightingsStore()
@@ -604,6 +635,8 @@ def _make_handler(state: AppState):
                     return self._send_json(add_watch(state.cfg, body))
                 if path == "/api/watch/remove":
                     return self._send_json(remove_watch(state.cfg, body))
+                if path == "/api/config/set":
+                    return self._send_json(set_config(state.cfg, body))
                 return self._send_json({"error": "not found", "path": path}, code=404)
             except ValueError as exc:
                 return self._send_json({"error": str(exc)}, code=400)

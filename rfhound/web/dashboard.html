@@ -176,6 +176,8 @@
       <a href="#presence">🚨 Presence</a>
       <a href="#contacts">🛰️ Contacts map</a>
       <a href="#bands">📚 Knowledge base</a>
+      <a href="#diagnostics">🩺 Diagnostics</a>
+      <a href="#settings">🎛️ Settings</a>
       <a href="#system">⚙️ System</a>
     </nav>
     <div class="foot">Receive-and-analyse only.<br>No transmit endpoint.<br><span id="ver2"></span></div>
@@ -393,6 +395,21 @@
         <div id="atOut" class="muted" style="margin-bottom:10px"></div>
         <div class="row"><label>Search</label><input type="text" id="bandSearch" placeholder="tpms, adsb, drone, cellular…"></div>
         <div class="scroll"><table id="bandsTbl"><thead><tr><th>Range (MHz)</th><th>Name</th><th>Category</th><th>Decoder</th></tr></thead><tbody></tbody></table></div>
+      </div>
+
+      <!-- Diagnostics / self-test -->
+      <div class="card section" id="diagnostics">
+        <h2>Diagnostics — self-test <span class="exp"><button id="diagRefresh">⟳ Run</button></span></h2>
+        <div class="muted" id="diagSummary">Run a self-test to check config, disk, deps, device and tools.</div>
+        <div class="scroll" style="margin-top:8px"><table id="diagTbl"><thead><tr><th></th><th>Check</th><th>Detail</th><th>Fix</th></tr></thead><tbody></tbody></table></div>
+      </div>
+
+      <!-- Settings -->
+      <div class="card section" id="settings">
+        <h2>Settings <span class="exp"><button id="setRefresh">⟳</button></span></h2>
+        <p class="muted" style="margin:0 0 8px">Change a setting and it's validated and saved to your config file.</p>
+        <div class="scroll"><table id="setTbl"><thead><tr><th>Setting</th><th>Value</th><th></th></tr></thead><tbody></tbody></table></div>
+        <div class="muted" id="setMsg" style="margin-top:6px"></div>
       </div>
 
       <!-- System -->
@@ -735,6 +752,40 @@ async function loadContacts(){ try{
     `<tr><td>${c.kind==='aircraft'?'✈ air':'⚓ sea'}</td><td>${esc(c.id)}</td><td class=muted>${esc(c.label||'—')}</td><td>${c.lat.toFixed(3)}</td><td>${c.lon.toFixed(3)}</td><td>${c.rssi_dbm.toFixed(0)}</td><td class=muted>${esc(c.detail||'—')}</td></tr>`));
 }catch(e){console.error(e);} }
 
+// ---- diagnostics / self-test ----
+async function loadDiagnostics(){ try{
+  $('#diagSummary').textContent='Running…';
+  const d=await api('/api/diagnostics'), tb=$('#diagTbl tbody'); tb.innerHTML='';
+  const sym={ok:'✓',warn:'!',fail:'✗'}, col={ok:'var(--clean,#3fb950)',warn:'var(--warn,#d29922)',fail:'var(--bad,#f85149)'};
+  d.checks.forEach(c=>tb.insertAdjacentHTML('beforeend',
+    `<tr><td style="color:${col[c.status]};font-weight:700">${sym[c.status]||'?'}</td><td>${esc(c.name)}</td><td class=muted>${esc(c.detail)}</td><td class=muted>${esc(c.hint||'—')}</td></tr>`));
+  const s=d.summary;
+  $('#diagSummary').innerHTML=`<b style="color:${s.healthy?'var(--clean,#3fb950)':'var(--warn,#d29922)'}">${s.healthy?'Healthy':'Needs attention'}</b> — ${s.ok} ok · ${s.warn} warn · ${s.fail} fail`;
+}catch(e){$('#diagSummary').textContent='Error: '+e.message;} }
+
+// ---- settings ----
+function setMsg(t,bad){const e=$('#setMsg');e.textContent=t;e.style.color=bad?'var(--bad)':'var(--dim)';if(t)setTimeout(()=>{e.textContent='';},2600);}
+function fmtSet(v){ if(v===true)return'on'; if(v===false)return'off'; if(v===''||v==null)return'(unset)'; return String(v); }
+async function loadSettings(){ try{
+  const d=await api('/api/config'), tb=$('#setTbl tbody'); tb.innerHTML='';
+  d.settings.forEach((s,i)=>{
+    let ctrl;
+    if(s.kind==='bool'){ ctrl=`<select data-k="${esc(s.key)}"><option value="on"${s.value?' selected':''}>on</option><option value="off"${!s.value?' selected':''}>off</option></select>`; }
+    else if(s.choices&&s.choices.length){ ctrl=`<select data-k="${esc(s.key)}">`+s.choices.map(c=>`<option value="${esc(c)}"${String(s.value)===String(c)?' selected':''}>${esc(c||'(none)')}</option>`).join('')+`</select>`; }
+    else { ctrl=`<input type="${s.kind==='int'||s.kind==='float'?'number':'text'}" data-k="${esc(s.key)}" value="${esc(fmtSet(s.value)==='(unset)'?'':s.value)}" style="width:150px">`; }
+    tb.insertAdjacentHTML('beforeend',
+      `<tr title="${esc(s.help)}"><td>${esc(s.key)}</td><td>${ctrl}</td><td><button class="mini setSave" data-k="${esc(s.key)}">Save</button></td></tr>`);
+  });
+  tb.querySelectorAll('.setSave').forEach(b=>b.onclick=()=>saveSetting(b.dataset.k));
+}catch(e){console.error(e);} }
+async function saveSetting(key){
+  const el=$(`#setTbl [data-k="${CSS.escape(key)}"]`); if(!el){return;}
+  try{ const d=await post('/api/config/set',{key,value:el.value});
+    const cur=(d.settings||[]).find(s=>s.key===key);
+    setMsg(`${key} = ${fmtSet(cur?cur.value:el.value)}`); loadSettings(); }
+  catch(e){ setMsg('Error: '+e.message,true); }
+}
+
 // ---- export ----
 let lastSweep=null,lastRecon=null;
 function download(name,text,mime){const b=new Blob([text],{type:mime}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);}
@@ -814,6 +865,7 @@ $('#eobRefresh').onclick=loadEmitters;$('#sightRefresh').onclick=loadSightings;$
 $('#wifiRefresh').onclick=loadWifi;$('#bleRefresh').onclick=loadBle;$('#huntBtn').onclick=toggleHunt;
 $('#presRefresh').onclick=loadPresence;$('#watchAddBtn').onclick=addWatch;
 $('#ctcRefresh').onclick=loadContacts;
+$('#diagRefresh').onclick=loadDiagnostics;$('#setRefresh').onclick=loadSettings;
 $('#expPeaksCsv').onclick=()=>exportPeaks('csv');$('#expPeaksJson').onclick=()=>exportPeaks('json');
 $('#expReconCsv').onclick=()=>exportRecon('csv');$('#expReconJson').onclick=()=>exportRecon('json');
 $('#expBandsCsv').onclick=()=>exportBands('csv');$('#expBandsJson').onclick=()=>exportBands('json');
@@ -823,7 +875,7 @@ window.addEventListener('resize',()=>{drawWaterfall();if(lastSpec)drawSpectrum(l
 initTheme();initWaterfallCtl();initRx();
 loadStatus().then(loadBands).then(loadBookmarks).then(doSweep).then(doRecon)
   .then(loadRecordings).then(loadEmitters).then(loadSightings)
-  .then(loadWifi).then(loadBle).then(loadPresence).then(loadContacts).then(refreshKpis).catch(e=>console.error(e));
+  .then(loadWifi).then(loadBle).then(loadPresence).then(loadContacts).then(loadSettings).then(refreshKpis).catch(e=>console.error(e));
 </script>
 </body>
 </html>

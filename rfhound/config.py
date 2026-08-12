@@ -72,6 +72,7 @@ class Config:
     color: bool = True
     dev_mode: bool = False
     simulate_mode: bool = False   # global: run everything against synthetic data
+    scan_workers: int = 4         # parallel worker threads for combined source scans
 
     # --- LLM copilot (optional) ---------------------------------------------
     llm_provider: str = ""    # "anthropic" | "local" (OpenAI-compatible) | ""
