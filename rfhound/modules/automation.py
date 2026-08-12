@@ -208,15 +208,16 @@ def _task_ble(cfg, params, simulate, prev) -> AutoResult:
 
 def _task_presence(cfg, params, simulate, prev) -> AutoResult:
     """Watch the presence watchlist; alert on appear/disappear/near transitions."""
-    from . import presence, wifi
+    from . import presence, wifi, intel
     from . import bluetooth as ble
     watch = [w if isinstance(w, presence.WatchItem) else presence.WatchItem(**w)
              for w in cfg.watchlist]
     if not watch:
         return AutoResult(False, "presence: empty watchlist (rfhound watch add ...)", {})
-    aps, devices = [], []
+    aps, devices, contacts = [], [], []
     if simulate:
         aps, devices = wifi.simulate_wifi(), ble.simulate_ble()
+        contacts = intel.simulate_contacts()
     else:
         if wifi.available()[0]:
             try:
@@ -228,7 +229,11 @@ def _task_presence(cfg, params, simulate, prev) -> AutoResult:
                 devices = ble.scan_ble(seconds=int(params.get("seconds", 8)))
             except Exception:  # noqa: BLE001
                 pass
-    obs = presence.observations_from(aps=aps, devices=devices)
+        try:
+            contacts = intel.contacts_from_messages()   # empty without a live decoder feed
+        except Exception:  # noqa: BLE001
+            pass
+    obs = presence.observations_from(aps=aps, devices=devices, contacts=contacts)
     findings, present = presence.check_presence(watch, obs, prev_present=set(prev) if prev else set())
     presence.record_events(findings)   # append to the presence event history
     summary = f"{len(watch)} watched, {len(present)} present"

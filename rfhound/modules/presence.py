@@ -58,13 +58,20 @@ def _matches(item: WatchItem, obs: dict) -> bool:
     return target == oid or (target and (target in oid or target in olabel))
 
 
-def observations_from(*, aps=None, devices=None) -> list:
-    """Unify current Wi-Fi APs / BLE devices into {kind,id,label,rssi_dbm} dicts."""
+def observations_from(*, aps=None, devices=None, contacts=None) -> list:
+    """Unify Wi-Fi APs / BLE devices / ADS-B+AIS contacts into observation dicts.
+
+    Each observation is ``{kind, id, label, rssi_dbm}``. Contacts use kind
+    ``"contact"`` (id = ICAO / MMSI), so a watch on a specific aircraft or vessel
+    flows through the same appear/disappear/near engine as Wi-Fi and BLE.
+    """
     obs = []
     for a in aps or []:
         obs.append({"kind": "wifi", "id": a.bssid, "label": a.ssid, "rssi_dbm": a.rssi_dbm})
     for d in devices or []:
         obs.append({"kind": "ble", "id": d.addr, "label": d.name, "rssi_dbm": d.rssi_dbm})
+    for c in contacts or []:
+        obs.append({"kind": "contact", "id": c.id, "label": c.label, "rssi_dbm": c.rssi_dbm})
     return obs
 
 

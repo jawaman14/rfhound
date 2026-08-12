@@ -266,11 +266,12 @@ def ble_dict(*, simulate: bool) -> dict:
 
 
 def presence_dict(cfg: Config, *, simulate: bool) -> dict:
-    from ..modules import presence, wifi
+    from ..modules import presence, wifi, intel
     from ..modules import bluetooth as ble
     aps = wifi.simulate_wifi() if simulate else (wifi.scan_wifi() if wifi.available()[0] else [])
     devices = ble.simulate_ble() if simulate else (ble.scan_ble() if ble.available()[0] else [])
-    obs = presence.observations_from(aps=aps, devices=devices)
+    contacts = intel.simulate_contacts() if simulate else intel.contacts_from_messages()
+    obs = presence.observations_from(aps=aps, devices=devices, contacts=contacts)
     out = []
     for w in cfg.watchlist:
         item = presence.WatchItem(**w)

@@ -1968,12 +1968,13 @@ def cmd_watch(args: argparse.Namespace, cfg: Config) -> int:
                       ["Time", "Kind", "Who", "Event", "dBm"], rows)
         return 0
     if sub == "check":
-        from .modules import wifi
+        from .modules import wifi, intel
         from .modules import bluetooth as ble
         sim = args.simulate or cfg.simulate_mode
         aps = wifi.simulate_wifi() if sim else (wifi.scan_wifi() if wifi.available()[0] else [])
         devices = ble.simulate_ble() if sim else (ble.scan_ble() if ble.available()[0] else [])
-        obs = presence.observations_from(aps=aps, devices=devices)
+        contacts = intel.simulate_contacts() if sim else intel.contacts_from_messages()
+        obs = presence.observations_from(aps=aps, devices=devices, contacts=contacts)
         watch = [presence.WatchItem(**w) for w in cfg.watchlist]
         if not watch:
             console.warn("Empty watchlist. Add one: rfhound watch add ble AirTag --on near")
@@ -2463,9 +2464,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     pwatch = sub.add_parser("watch", help="Presence/geofence: alert when an identifier appears/leaves")
     wtsub = pwatch.add_subparsers(dest="watch_cmd")
-    wtadd = wtsub.add_parser("add", help="Watch an identifier (BSSID/addr/SSID/name)")
-    wtadd.add_argument("kind", choices=["wifi", "ble", "any"])
-    wtadd.add_argument("id", help="BSSID / address / SSID / name / decoded ID")
+    wtadd = wtsub.add_parser("add", help="Watch an identifier (BSSID/addr/SSID/name/ICAO/MMSI)")
+    wtadd.add_argument("kind", choices=["wifi", "ble", "contact", "any"])
+    wtadd.add_argument("id", help="BSSID / address / SSID / name / ICAO / MMSI / decoded ID")
     wtadd.add_argument("--on", choices=["appear", "disappear", "near"], default="appear")
     wtadd.add_argument("--rssi", type=float, default=-60.0,
                        help="For --on near: proximity threshold (dBm)")

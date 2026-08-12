@@ -87,6 +87,12 @@ All notable changes to RFHound. Versioning is [SemVer](https://semver.org/).
   and counters (uptime, requests, device present, tools installed, bookmark /
   watchlist / automation counts, tx-enabled) in Prometheus text format for
   monitoring. Token-gated like the rest of the API; a scrape triggers no scanning.
+- **Watch specific aircraft / vessels** — ADS-B (ICAO) and AIS (MMSI) contacts
+  now flow through the presence engine as a new `contact` kind, so
+  `watch add contact <ICAO/MMSI>` gets the whole pipeline: `watch check` /
+  `history`, the dashboard Presence panel, and the `presence` automation task's
+  appear/disappear/near alerting (webhook/email/NDJSON) — e.g. alert when a
+  named aircraft appears or a watched vessel comes within an RSSI threshold.
 
 ## [1.3.0] — 2026-08-08
 

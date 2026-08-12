@@ -1,5 +1,5 @@
 from rfhound.config import Config
-from rfhound.modules import presence, wifi, bluetooth as ble, automation as auto
+from rfhound.modules import presence, wifi, bluetooth as ble, automation as auto, intel
 
 
 def _obs():
@@ -83,3 +83,27 @@ def test_record_events_empty_is_noop(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     assert presence.record_events([]) == 0
     assert presence.read_events() == []
+
+
+# --- contacts (ADS-B / AIS) flow through the same presence engine ---
+def test_observations_include_contacts():
+    obs = presence.observations_from(contacts=intel.simulate_contacts())
+    kinds = {o["kind"] for o in obs}
+    assert kinds == {"contact"}
+    ids = {o["id"] for o in obs}
+    assert "abc123" in ids            # a simulated aircraft ICAO
+
+
+def test_watch_specific_aircraft_appears():
+    watch = [presence.WatchItem("contact", "abc123", on="appear", label="BAW117")]
+    obs = presence.observations_from(contacts=intel.simulate_contacts())
+    findings, present = presence.check_presence(watch, obs, prev_present=set())
+    assert any(f.event == "appeared" and f.label == "BAW117" for f in findings)
+    assert "contact:abc123" in present
+
+
+def test_presence_task_alerts_on_watched_contact():
+    cfg = Config(watchlist=[{"kind": "contact", "id": "235094810", "on": "near",
+                             "rssi_threshold": -75.0}])
+    r = auto.run_task(cfg, {"name": "p", "task": "presence"}, simulate=True, prev=None)
+    assert r.alert is True and "near:" in r.summary
