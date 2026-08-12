@@ -98,6 +98,9 @@ All notable changes to RFHound. Versioning is [SemVer](https://semver.org/).
   `--include-secrets`); `config import FILE` merges an export back, skipping
   redacted placeholders so it never clobbers an existing secret and never
   imports transmit allow-ranges (those stay behind the gated `tx enable` flow).
+- **Web API rate limiting** — an opt-in per-client token bucket on the dashboard
+  server (`web --rate-limit N` or the `web_rate_limit` setting, req/min, 0 = off).
+  Over-limit requests get `429`; disabled by default so existing use is unchanged.
 
 ## [1.3.0] — 2026-08-08
 

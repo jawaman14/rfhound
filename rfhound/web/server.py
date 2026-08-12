@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hmac
 import json
+import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from http.cookies import SimpleCookie
@@ -466,12 +467,34 @@ def decoders_dict() -> dict:
 # App state + request routing
 # --------------------------------------------------------------------------- #
 class AppState:
-    def __init__(self, cfg: Config, *, force_simulate: bool = False, token: str | None = None):
+    def __init__(self, cfg: Config, *, force_simulate: bool = False, token: str | None = None,
+                 rate_limit: int | None = None):
         self.cfg = cfg
         self.force_simulate = force_simulate
         self.token = token or None  # empty string => no auth
         self.started_at = time.time()
         self.request_count = 0
+        # Per-client token bucket (requests/min). 0/None => disabled.
+        rl = rate_limit if rate_limit is not None else getattr(cfg, "web_rate_limit", 0)
+        self.rate_limit = int(rl or 0)
+        self._buckets: dict = {}
+        self._rl_lock = threading.Lock()
+
+    def allow(self, client: str) -> bool:
+        """Token-bucket rate check for *client* (burst = one minute's allowance)."""
+        if self.rate_limit <= 0:
+            return True
+        now = time.monotonic()
+        cap = float(self.rate_limit)
+        refill = cap / 60.0
+        with self._rl_lock:
+            tokens, last = self._buckets.get(client, (cap, now))
+            tokens = min(cap, tokens + (now - last) * refill)
+            if tokens < 1.0:
+                self._buckets[client] = (tokens, now)
+                return False
+            self._buckets[client] = (tokens - 1.0, now)
+            return True
 
     def wants_simulate(self, qs: dict) -> bool:
         if self.force_simulate:
@@ -489,8 +512,9 @@ class AppState:
 
 
 def build_app_state(cfg: Config | None = None, *, force_simulate: bool = False,
-                    token: str | None = None) -> AppState:
-    return AppState(cfg or load_config(), force_simulate=force_simulate, token=token)
+                    token: str | None = None, rate_limit: int | None = None) -> AppState:
+    return AppState(cfg or load_config(), force_simulate=force_simulate, token=token,
+                    rate_limit=rate_limit)
 
 
 def _make_handler(state: AppState):
@@ -536,6 +560,12 @@ def _make_handler(state: AppState):
             self.end_headers()
             self.wfile.write(body)
 
+        def _client_ip(self) -> str:
+            try:
+                return self.client_address[0]
+            except Exception:
+                return "?"
+
         def _presented_token(self, qs):
             """Pull an API token from the Authorization header, X-RFHound-Token,
             a query param, or the rfh_token cookie (in that order)."""
@@ -564,6 +594,8 @@ def _make_handler(state: AppState):
             sim = state.wants_simulate(qs)
             cfg = state.cfg
             state.request_count += 1
+            if not state.allow(self._client_ip()):
+                return self._send_json({"error": "rate limited"}, code=429)
             # Gate the data API + metrics behind the token when one is configured.
             # The HTML shell itself carries no data, so it's always served.
             gated = path.startswith("/api/") or path == "/metrics"
@@ -667,6 +699,9 @@ def _make_handler(state: AppState):
             parsed = urlparse(self.path)
             path = parsed.path
             qs = parse_qs(parsed.query)
+            state.request_count += 1
+            if not state.allow(self._client_ip()):
+                return self._send_json({"error": "rate limited"}, code=429)
             if not state.token_ok(self._presented_token(qs)):
                 return self._send_json({"error": "unauthorized"}, code=401)
             body = self._read_json_body()
@@ -696,13 +731,17 @@ def _make_handler(state: AppState):
 
 
 def serve(cfg: Config | None = None, *, host: str = "127.0.0.1", port: int = 8000,
-          force_simulate: bool = False, token: str | None = None) -> None:
+          force_simulate: bool = False, token: str | None = None,
+          rate_limit: int | None = None) -> None:
     """Start the dashboard/API server (blocking).
 
     When ``token`` is set, every ``/api/…`` request must present it (Bearer
     header, ``X-RFHound-Token``, ``?token=``, or the ``rfh_token`` cookie).
+    ``rate_limit`` (requests/min per client, 0 = off) defaults to the config's
+    ``web_rate_limit``.
     """
-    state = build_app_state(cfg, force_simulate=force_simulate, token=token)
+    state = build_app_state(cfg, force_simulate=force_simulate, token=token,
+                            rate_limit=rate_limit)
     handler = _make_handler(state)
     httpd = ThreadingHTTPServer((host, port), handler)
     actual = httpd.server_address[1]
@@ -713,6 +752,8 @@ def serve(cfg: Config | None = None, *, host: str = "127.0.0.1", port: int = 800
     console.success(f"RFHound dashboard on http://{host}:{actual}"
                     + ("  (token required)" if token else ""))
     console.print_("  REST API under /api/…  ·  receive-only  ·  Ctrl-C to stop")
+    if state.rate_limit > 0:
+        console.print_(f"  Rate limit: {state.rate_limit} req/min per client")
     if token and exposed:
         console.print_(f"  Authenticated link: http://{host}:{actual}/?token={token}")
     try:

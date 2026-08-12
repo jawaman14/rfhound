@@ -1018,7 +1018,8 @@ def cmd_web(args: argparse.Namespace, cfg: Config) -> int:
     if args.open:
         import webbrowser
         webbrowser.open(url)
-    web_server.serve(cfg, host=args.host, port=args.port, force_simulate=force_sim, token=token)
+    web_server.serve(cfg, host=args.host, port=args.port, force_simulate=force_sim, token=token,
+                     rate_limit=getattr(args, "rate_limit", None))
     return 0
 
 
@@ -2087,7 +2088,10 @@ def build_parser() -> argparse.ArgumentParser:
     pw.add_argument("--token", nargs="?", const="auto", default=None,
                     help="Require this API token (or 'auto'/no value to generate one). "
                          "Auto-generated when binding to a non-localhost host.")
-    pw.set_defaults(func=cmd_web)
+    pw.add_argument("--rate-limit", dest="rate_limit", type=int, default=None,
+                    help="Per-client request rate limit (req/min; 0 = off). "
+                         "Overrides the web_rate_limit config setting.")
+    pw.set_defaults(func=cmd_web, rate_limit=None)
 
     pb = sub.add_parser("bands", help="Browse the frequency knowledge base")
     pb.add_argument("--category", help="Filter by category (ism, aviation, ...)")

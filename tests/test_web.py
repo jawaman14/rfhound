@@ -377,6 +377,34 @@ def test_metrics_requires_token_when_set():
         httpd.server_close()
 
 
+def test_rate_limit_returns_429():
+    state = web.build_app_state(Config(), force_simulate=True, rate_limit=3)
+    handler = web._make_handler(state)
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    port = httpd.server_address[1]
+    t = threading.Thread(target=httpd.serve_forever, daemon=True)
+    t.start()
+    try:
+        base = f"http://127.0.0.1:{port}"
+        codes = []
+        for _ in range(6):
+            try:
+                c, _ = get(base + "/api/version")
+                codes.append(c)
+            except urllib.error.HTTPError as e:
+                codes.append(e.code)
+        assert 200 in codes and 429 in codes        # burst allowed, then throttled
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+
+def test_rate_limit_disabled_by_default(base_url):
+    # The default fixture has no rate limit; many quick requests all succeed.
+    codes = [get(base_url + "/api/version")[0] for _ in range(20)]
+    assert all(c == 200 for c in codes)
+
+
 def test_diagnostics_endpoint(base_url):
     code, data = get(base_url + "/api/diagnostics")
     assert code == 200

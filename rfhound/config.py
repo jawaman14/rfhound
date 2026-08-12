@@ -96,6 +96,9 @@ class Config:
     smtp_from: str = ""
     smtp_use_tls: bool = True
 
+    # Web dashboard: per-client request rate limit (requests/min; 0 = disabled).
+    web_rate_limit: int = 0
+
     # --- Multi-node linking -------------------------------------------------
     hub_url: str = ""         # aggregator this node reports to
     node_id: str = ""         # this node's identity in a sensor mesh

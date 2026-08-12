@@ -50,6 +50,8 @@ EDITABLE: tuple[Setting, ...] = (
     Setting("device_serial", "str", "Select a specific HackRF by serial"),
     Setting("scan_workers", "int", "Parallel worker threads for combined scans",
             minimum=1, maximum=16),
+    Setting("web_rate_limit", "int", "Dashboard per-client rate limit (req/min; 0 = off)",
+            minimum=0, maximum=100000),
     Setting("color", "bool", "Colourised terminal output"),
     Setting("simulate_mode", "bool", "Global simulate mode (synthetic data everywhere)"),
     Setting("dev_mode", "bool", "Developer mode: verbose debug + tracebacks"),
