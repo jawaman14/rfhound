@@ -93,6 +93,11 @@ All notable changes to RFHound. Versioning is [SemVer](https://semver.org/).
   `history`, the dashboard Presence panel, and the `presence` automation task's
   appear/disappear/near alerting (webhook/email/NDJSON) — e.g. alert when a
   named aircraft appears or a watched vessel comes within an RSSI threshold.
+- **Config export / import** — `config export [FILE]` writes the whole config
+  for backup or fleet deployment (SMTP password / hub token redacted unless
+  `--include-secrets`); `config import FILE` merges an export back, skipping
+  redacted placeholders so it never clobbers an existing secret and never
+  imports transmit allow-ranges (those stay behind the gated `tx enable` flow).
 
 ## [1.3.0] — 2026-08-08
 

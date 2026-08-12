@@ -85,6 +85,7 @@ rfhound --simulate web --open   # launch the dashboard with no hardware
 | `config show\|init\|path\|wizard` | Configuration |
 | `config list\|get <key>\|set <key> <value>` | View / change a validated setting |
 | `config profile save\|load\|list\|delete <name>` | Named presets of the settings |
+| `config export [FILE] [--include-secrets]\|import FILE` | Backup / migrate the config |
 | `doctor [--self-test\|--rf\|--json]` | Environment check + deep self-test diagnostics |
 | `sources [--scan] [--simulate]` | List / parallel-scan the passive RF sources |
 | `contacts [--simulate --json --near LAT,LON --geojson F --kml F]` | ADS-B/AIS contacts, proximity + map export |

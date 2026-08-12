@@ -256,3 +256,27 @@ def test_contacts_near_distance(capsys):
 
 def test_contacts_near_bad_input():
     assert run(["--simulate", "contacts", "--near", "notacoord"]) == 2
+
+
+def test_config_export_import_roundtrip(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    assert run(["config", "set", "lna_gain", "24"]) == 0
+    out_file = tmp_path / "backup.json"
+    assert run(["config", "export", str(out_file)]) == 0
+    assert out_file.exists()
+    data = json.loads(out_file.read_text())
+    assert data["lna_gain"] == 24
+    # Change, then import the backup to restore.
+    assert run(["config", "set", "lna_gain", "8"]) == 0
+    capsys.readouterr()
+    assert run(["config", "import", str(out_file)]) == 0
+    from rfhound.config import load_config
+    assert load_config().lna_gain == 24
+
+
+def test_config_export_stdout(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    assert run(["config", "export"]) == 0
+    data = json.loads(capsys.readouterr().out)
+    assert "lna_gain" in data
+    assert data["smtp_password"] == "" or data["smtp_password"] == "***REDACTED***"

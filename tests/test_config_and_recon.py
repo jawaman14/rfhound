@@ -23,6 +23,34 @@ def test_config_ignores_unknown_keys():
     assert cfg.lna_gain == 8
 
 
+def test_export_redacts_secrets_by_default():
+    from rfhound.config import export_dict, REDACTED
+    cfg = Config(smtp_password="hunter2", hub_token="tok", lna_gain=24)
+    d = export_dict(cfg)
+    assert d["smtp_password"] == REDACTED and d["hub_token"] == REDACTED
+    assert d["lna_gain"] == 24
+    full = export_dict(cfg, include_secrets=True)
+    assert full["smtp_password"] == "hunter2"
+
+
+def test_import_merge_skips_redacted_secret():
+    from rfhound.config import merge_dict, REDACTED
+    cfg = Config(smtp_password="original", lna_gain=8)
+    applied = merge_dict(cfg, {"lna_gain": 24, "smtp_password": REDACTED, "vga_gain": 30})
+    assert cfg.lna_gain == 24 and cfg.vga_gain == 30
+    assert cfg.smtp_password == "original"          # redacted placeholder skipped
+    assert "smtp_password" not in applied and "lna_gain" in applied
+
+
+def test_import_merge_ignores_unknown_and_tx_ranges():
+    from rfhound.config import merge_dict
+    cfg = Config()
+    applied = merge_dict(cfg, {"nope": 1, "tx_allow_ranges": [{"low_hz": 1, "high_hz": 2}],
+                               "jurisdiction": "UK"})
+    assert applied == ["jurisdiction"] and cfg.jurisdiction == "UK"
+    assert cfg.tx_allow_ranges == []                # tx ranges never imported
+
+
 def test_recon_simulated_produces_findings():
     cfg = Config()
     report = recon_mod.run_recon(cfg, simulate=True, progress=False)

@@ -1526,6 +1526,35 @@ def cmd_config(args: argparse.Namespace, cfg: Config) -> int:
     if args.config_cmd == "path":
         console.print_(str(config_path()))
         return 0
+    if args.config_cmd == "export":
+        import json
+        from .config import export_dict
+        data = export_dict(cfg, include_secrets=args.include_secrets)
+        text = json.dumps(data, indent=2)
+        if args.file:
+            from pathlib import Path
+            Path(args.file).write_text(text + "\n")
+            console.success(f"Exported config → {args.file}"
+                            + ("" if args.include_secrets else " (secrets redacted)"))
+        else:
+            console.raw(text)
+        return 0
+    if args.config_cmd == "import":
+        import json
+        from pathlib import Path
+        from .config import merge_dict
+        try:
+            data = json.loads(Path(args.file).read_text())
+        except (OSError, ValueError) as exc:
+            console.error(f"Could not read {args.file}: {exc}")
+            return 2
+        if not isinstance(data, dict):
+            console.error("Import file must contain a JSON object.")
+            return 2
+        applied = merge_dict(cfg, data)
+        save_config(cfg)
+        console.success(f"Imported {len(applied)} setting(s) from {args.file}.")
+        return 0
     if args.config_cmd == "list":
         from . import settings
         rows = [[s["key"], s["kind"], _fmt_setting(s["value"]),
@@ -2495,6 +2524,12 @@ def build_parser() -> argparse.ArgumentParser:
     cset = csub.add_parser("set", help="Change one setting (validated)")
     cset.add_argument("key")
     cset.add_argument("value")
+    cexp = csub.add_parser("export", help="Export config for backup/migration (secrets redacted)")
+    cexp.add_argument("file", nargs="?", help="Output file (omit to print to stdout)")
+    cexp.add_argument("--include-secrets", dest="include_secrets", action="store_true",
+                      help="Include SMTP password / hub token in the export")
+    cimp = csub.add_parser("import", help="Merge a config export onto the current config")
+    cimp.add_argument("file", help="A config JSON file to import")
     cprof = csub.add_parser("profile", help="Save/load named setting presets")
     prsub = cprof.add_subparsers(dest="profile_cmd")
     prsub.add_parser("list", help="List saved profiles")

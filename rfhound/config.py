@@ -138,3 +138,36 @@ def save_config(cfg: Config) -> Path:
     except OSError as exc:
         raise ConfigError(f"Could not write config at {path}: {exc}") from exc
     return path
+
+
+# Secret fields redacted on export unless explicitly included.
+SECRET_KEYS = ("smtp_password", "hub_token")
+REDACTED = "***REDACTED***"
+
+
+def export_dict(cfg: Config, *, include_secrets: bool = False) -> dict:
+    """Config as a plain dict for backup/migration; secrets redacted by default."""
+    d = cfg.to_dict()
+    if not include_secrets:
+        for k in SECRET_KEYS:
+            if d.get(k):
+                d[k] = REDACTED
+    return d
+
+
+def merge_dict(cfg: Config, data: dict) -> list:
+    """Apply the known keys present in *data* onto *cfg* in place.
+
+    Redacted secret placeholders are skipped, so importing a redacted export
+    never clobbers an existing secret. Returns the list of applied keys.
+    """
+    known = set(Config.__dataclass_fields__)  # type: ignore[attr-defined]
+    applied = []
+    for key, value in data.items():
+        if key not in known or key == "tx_allow_ranges":
+            continue
+        if key in SECRET_KEYS and value == REDACTED:
+            continue
+        setattr(cfg, key, value)
+        applied.append(key)
+    return applied
