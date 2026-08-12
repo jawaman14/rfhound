@@ -2046,10 +2046,19 @@ def build_parser() -> argparse.ArgumentParser:
             "  rfhound setup                one-time setup summary\n"
             "  rfhound --simulate recon     try it with no hardware\n"
             "  rfhound at 433.92            what's here + every tool for it\n"
-            "  rfhound tune adsb            what frequency do I need?\n"
-            "  rfhound sweep 430 440 --identify   auto-identify signals\n"
-            "  rfhound defense respond jamming    a threat's response playbook\n"
             "  rfhound web --open           browser dashboard + REST API\n"
+            "\n"
+            "commands by area (run `rfhound <command> -h` for details):\n"
+            "  Getting started   setup · menu · doctor · device · config\n"
+            "  Spectrum & IQ     sweep · recon · capture · recordings · decode · classify\n"
+            "  Sources & signals sources · wifi · ble · contacts · hunt · track\n"
+            "  Frequency helpers at · tune · bands · bookmark\n"
+            "  Intel & presence  watch · sigint · gnuradio\n"
+            "  Defense           defense\n"
+            "  Automation & mesh automate · hub · node · web\n"
+            "  AI copilot        ai · ask\n"
+            "  Transmit (gated)  tx · replay\n"
+            "  Extend / dev      mods · dev\n"
             "\nfull reference: docs/HELP.md  ·  tutorial: docs/TUTORIAL.md"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -2058,7 +2067,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--dev", action="store_true", help="Developer mode: verbose debug + tracebacks")
     p.add_argument("--simulate", dest="simulate_global", action="store_true",
                    help="Global simulate mode: run everything against synthetic data")
-    sub = p.add_subparsers(dest="command")
+    sub = p.add_subparsers(dest="command", metavar="<command>")
 
     sub.add_parser("setup", help="One-time setup summary + next steps").set_defaults(func=cmd_setup)
 

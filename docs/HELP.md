@@ -34,6 +34,21 @@ rfhound --simulate web --open   # launch the dashboard with no hardware
 
 ## Command reference
 
+Commands are grouped by area (the same grouping as `rfhound --help`):
+
+| Area | Commands |
+|---|---|
+| Getting started | `setup` · `menu` · `doctor` · `device` · `config` |
+| Spectrum & IQ | `sweep` · `recon` · `capture` · `recordings` · `decode` · `classify` |
+| Sources & signals | `sources` · `wifi` · `ble` · `contacts` · `hunt` · `track` |
+| Frequency helpers | `at` · `tune` · `bands` · `bookmark` |
+| Intel & presence | `watch` · `sigint` · `gnuradio` |
+| Defense | `defense` |
+| Automation & mesh | `automate` · `hub` · `node` · `web` |
+| AI copilot | `ai` · `ask` |
+| Transmit (gated) | `tx` · `replay` |
+| Extend / dev | `mods` · `dev` |
+
 ### Orientation
 | Command | What it does |
 |---|---|
