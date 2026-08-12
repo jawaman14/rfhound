@@ -17,8 +17,8 @@ dev:  ## Install RFHound + test/lint tools
 test:  ## Run the test suite
 	pytest -q
 
-lint:  ## Run flake8
-	flake8 rfhound --max-line-length=110 --extend-ignore=E203,W503
+lint:  ## Run flake8 (rules in .flake8, same as CI)
+	flake8 rfhound tests
 
 run:  ## Launch the guided menu
 	rfhound
