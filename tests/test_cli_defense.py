@@ -38,3 +38,14 @@ def test_defense_resilience_simulate(capsys):
     out = capsys.readouterr().out
     assert rc == 0
     assert "resilience" in out.lower()
+
+
+def test_defense_imsi_detect_and_alias(capsys):
+    rc = run(["defense", "imsi-detect", "--simulate"])
+    out = capsys.readouterr().out
+    assert rc == 1                       # rogue-BTS indicators found -> non-zero
+    assert "IMSI" in out.upper()
+    # The legacy name stays a working alias.
+    rc2 = run(["defense", "imsi-catcher", "--simulate"])
+    assert rc2 == 1
+    assert "IMSI" in capsys.readouterr().out.upper()

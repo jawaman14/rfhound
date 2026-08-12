@@ -102,6 +102,12 @@ All notable changes to RFHound. Versioning is [SemVer](https://semver.org/).
   server (`web --rate-limit N` or the `web_rate_limit` setting, req/min, 0 = off).
   Over-limit requests get `429`; disabled by default so existing use is unchanged.
 
+### Changed
+- **`defense imsi-catcher` → `defense imsi-detect`** — the command detects rogue
+  base stations / IMSI-catchers, so it's now named for the defensive action
+  (matching `hop-detect`) rather than the offensive device, which read wrongly
+  for a receive-only tool. `imsi-catcher` stays as a backward-compatible alias.
+
 ## [1.3.0] — 2026-08-08
 
 A ground-up dashboard rebuild plus a broad "beef up" pass: dashboard capture and

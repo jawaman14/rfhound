@@ -162,7 +162,7 @@ flags a pattern of many short-lived (transient) frequencies.
 rfhound defense hop-detect --simulate
 ```
 
-## 9b. Rogue base station / IMSI-catcher detection — `defense imsi-catcher`
+## 9b. Rogue base station / IMSI-catcher detection — `defense imsi-detect`
 
 The **defensive** counterpart to an IMSI catcher (SnoopSnitch / EFF Crocodile
 Hunter approach). RFHound does not impersonate a network or intercept anyone — it
@@ -172,8 +172,8 @@ unusual/changing LAC, an implausibly strong new cell, unexpected operator, or a
 Cell-ID reused across frequencies.**
 
 ```bash
-rfhound defense imsi-catcher --simulate            # demo with a planted catcher
-rfhound defense imsi-catcher --file cells.json     # your observed cell records
+rfhound defense imsi-detect --simulate            # demo with a planted catcher
+rfhound defense imsi-detect --file cells.json     # your observed cell records
 ```
 
 `cells.json` is an array of objects with fields like `rat, mcc, mnc, lac, cid,

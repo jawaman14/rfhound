@@ -29,8 +29,8 @@ the mechanism, the detectable signature, and RFHound's coverage.
 | **Spoofing / injection** | Transmit forged messages a receiver trusts (ghost aircraft, fake vessels, false sensors) | Impossible kinematics; duplicate identities; values inconsistent with physics or other sensors | `defense spoof-check adsb\|ais`; `intel` plausibility checks |
 | **Meaconing** | Record authentic signals and rebroadcast (delayed) to induce false position/time (esp. GNSS) | Sudden position/time jump; power step; loss-then-return | Roadmap (GNSS interference monitor) |
 | **Bit-flipping / integrity** | Alter ciphertext to change decrypted meaning without the key (weak/absent MIC) | Protocol-anomaly at the app layer (needs decode) | Roadmap (decoder → anomaly wiring) |
-| **Downgrade** | Force a device onto a weaker legacy protocol (e.g. 5G/4G → 2G) to strip protections | A cell advertising legacy tech / forcing re-selection; encryption dropped | `defense imsi-catcher` (rogue-BTS indicators) |
-| **Rogue infrastructure** | Impersonate trusted infrastructure (IMSI catcher / cell-site simulator, rogue AP) | New strong cell, unknown LAC/TAC, A5/0, empty neighbour list, ID reuse | `defense imsi-catcher` |
+| **Downgrade** | Force a device onto a weaker legacy protocol (e.g. 5G/4G → 2G) to strip protections | A cell advertising legacy tech / forcing re-selection; encryption dropped | `defense imsi-detect` (rogue-BTS indicators) |
+| **Rogue infrastructure** | Impersonate trusted infrastructure (IMSI catcher / cell-site simulator, rogue AP) | New strong cell, unknown LAC/TAC, A5/0, empty neighbour list, ID reuse | `defense imsi-detect` |
 | **Brute-force / weak-crypto** | Exhaust a small keyspace or exploit a broken cipher | Rapid repeated attempts at one target | Detection only (rate/anomaly); RFHound ships **no** brute-forcer |
 | **Traffic analysis** | Infer activity from metadata even when payloads are encrypted (timing, volume, emitter presence) | Emitter on/off patterns, duty cycles | `sigint emitters` (EOB), `track`, hop-detect |
 
@@ -122,7 +122,7 @@ classes, real-world prevalence, detection indicators, and RFHound coverage.
 - **Detect (RF side):** A5/0 or downgraded ciphering, unknown/changing LAC-TAC,
   an implausibly strong new cell, unexpected MCC/MNC, Cell-ID reused across ARFCNs,
   missing neighbour list.
-- **RFHound:** `defense imsi-catcher` (ingest observed cell parameters, score
+- **RFHound:** `defense imsi-detect` (ingest observed cell parameters, score
   rogue-BTS likelihood). RFHound performs **no** cellular transmission and no SS7
   tooling — detection only.
 
@@ -172,7 +172,7 @@ The *encoding* often decides the attack more than the frequency does.
 | Rolling-code posture / RollJam | ✅ posture + jam-half | `defense rolling-assess`, `monitor` | correlated jam-then-press detector |
 | ADS-B / AIS spoofing | ✅ | `defense spoof-check` | multi-node MLAT/DOA cross-check |
 | GNSS jamming/spoofing | ⚠️ playbook only | `defense respond gps_spoof` | passive GNSS interference monitor |
-| Rogue base station / downgrade | ✅ (RF indicators) | `defense imsi-catcher` | live gr-gsm ingest |
+| Rogue base station / downgrade | ✅ (RF indicators) | `defense imsi-detect` | live gr-gsm ingest |
 | Counter-UAS | ✅ | `defense drone-scan` | RF-fingerprint drone models |
 | Emitter presence / traffic analysis | ✅ | `sigint emitters`, `track`, `hop-detect` | on/off-pattern alerting |
 | Geolocation of an emitter | ✅ RSSI centroid | `sigint locate` | **TDOA multilateration** (see ROADMAP) |

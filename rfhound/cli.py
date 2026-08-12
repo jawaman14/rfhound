@@ -930,7 +930,7 @@ def cmd_defense(args: argparse.Namespace, cfg: Config) -> int:
         console.table("Drone-band detections", ["Band", "Freq (MHz)", "Power dB", "Confidence"], rows)
         return 1
 
-    if args.defense_cmd == "imsi-catcher":
+    if args.defense_cmd in ("imsi-detect", "imsi-catcher"):
         if args.simulate:
             obs = cellular_mod.simulate_observations()
         elif args.file:
@@ -2251,7 +2251,7 @@ def build_parser() -> argparse.ArgumentParser:
     fhp = fsub.add_parser("hop-detect", help="Detect frequency-hopping (agile) emitters")
     fhp.add_argument("--simulate", action="store_true")
 
-    fic = fsub.add_parser("imsi-catcher",
+    fic = fsub.add_parser("imsi-detect", aliases=["imsi-catcher"],
                           help="Detect rogue base station / IMSI-catcher indicators (defensive)")
     fic.add_argument("--file", help="JSON array of observed cell records")
     fic.add_argument("--simulate", action="store_true")
