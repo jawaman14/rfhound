@@ -96,7 +96,8 @@ Commands are grouped by area (the same grouping as `rfhound --help`):
 | `ask "<query>" [--provider offline\|anthropic\|local]` | LLM copilot (receive-only) |
 | `hub [--host --port --token]` | Run the multi-node aggregator |
 | `node --hub URL --id N [--scan recon\|drone\|imsi]` | Push a receiver's findings to a hub |
-| `mods list\|sample` | Manage extension mods/plugins |
+| `mods list\|sample` | Manage extension mods/plugins (bands, recipes, detectors, decoders) |
+| `mods decoders\|run <id> --bits/--hex` | List / run software (Python) decoders |
 | `config show\|init\|path\|wizard` | Configuration |
 | `config list\|get <key>\|set <key> <value>` | View / change a validated setting |
 | `config profile save\|load\|list\|delete <name>` | Named presets of the settings |

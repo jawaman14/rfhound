@@ -779,10 +779,42 @@ def _load_json_list(path: str | None) -> list:
 
 
 def cmd_mods(args: argparse.Namespace, cfg: Config) -> int:
+    from .modules import demod
     if args.mods_cmd == "sample":
         path = plugins.write_sample_mod()
         console.success(f"Wrote a sample mod to {path}")
         console.print_("Edit it, then run 'rfhound mods list' to load it.")
+        return 0
+    if args.mods_cmd == "decoders":
+        plugins.load_mods(Path(args.dir) if args.dir else None)   # pull in mod decoders
+        rows = [[d.id, d.name, d.kind, d.source, d.description or "—"]
+                for d in (demod.get(n) for n in demod.names())]
+        console.table("Software decoders", ["ID", "Name", "Kind", "Source", "Notes"], rows)
+        console.print_("Run one: rfhound mods run <id> --bits 1010… (or --hex for bytes)")
+        return 0
+    if args.mods_cmd == "run":
+        plugins.load_mods(Path(args.dir) if args.dir else None)
+        dec = demod.get(args.id)
+        if dec is None:
+            console.error(f"Unknown decoder '{args.id}'. See: rfhound mods decoders")
+            return 2
+        if dec.kind == "iq":
+            console.error(f"'{args.id}' is an IQ decoder; run it from a mod/script, not the CLI.")
+            return 2
+        if args.hex is not None:
+            payload: object = bytes.fromhex(args.hex.replace(" ", ""))
+        elif args.bits is not None:
+            payload = [1 if c == "1" else 0 for c in args.bits if c in "01"]
+        else:
+            console.error("Provide input: --bits 1010… or --hex DEADBEEF")
+            return 2
+        try:
+            result = dec.fn(payload)
+        except Exception as exc:  # a bad decoder must not crash the CLI
+            console.error(f"decoder error: {type(exc).__name__}: {exc}")
+            return 1
+        import json
+        console.raw(json.dumps(result, default=str))
         return 0
     # list (also the default): load and report
     directory = Path(args.dir) if args.dir else plugins.mods_dir()
@@ -795,8 +827,11 @@ def cmd_mods(args: argparse.Namespace, cfg: Config) -> int:
     for m in loaded:
         status = "ok" if not m.error else f"ERROR: {m.error}"
         rows.append([m.name, m.version,
-                     f"{len(m.bands)}b/{len(m.recipes)}r/{len(m.detectors)}d", status])
+                     f"{len(m.bands)}b/{len(m.recipes)}r/{len(m.detectors)}d/"
+                     f"{len(m.decoders)}x", status])
     console.table("Loaded mods", ["Name", "Version", "Adds", "Status"], rows)
+    console.print_("Adds key: b=bands r=recipes d=detectors x=decoders  ·  "
+                   "list decoders: rfhound mods decoders")
     return 0
 
 
@@ -2439,7 +2474,14 @@ def build_parser() -> argparse.ArgumentParser:
     ml = msub.add_parser("list", help="Load and list mods")
     ml.add_argument("--dir", help="Mods directory (default ~/.config/rfhound/mods)")
     msub.add_parser("sample", help="Write a sample mod to the mods directory")
-    pm.set_defaults(func=cmd_mods, mods_cmd="list", dir=None)
+    mdec = msub.add_parser("decoders", help="List software decoders (built-in + from mods)")
+    mdec.add_argument("--dir", help="Mods directory to load first")
+    mrun = msub.add_parser("run", help="Run a software decoder on bits/bytes")
+    mrun.add_argument("id", help="Decoder id (see: rfhound mods decoders)")
+    mrun.add_argument("--bits", help="Input bitstring, e.g. 1010110")
+    mrun.add_argument("--hex", help="Input bytes as hex, e.g. DEADBEEF")
+    mrun.add_argument("--dir", help="Mods directory to load first")
+    pm.set_defaults(func=cmd_mods, mods_cmd="list", dir=None, id=None, bits=None, hex=None)
 
     psrc = sub.add_parser("sources", help="List (or --scan) passive RF sources: HackRF + Wi-Fi + BLE")
     psrc.add_argument("--scan", action="store_true", help="Scan all available sources at once")

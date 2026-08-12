@@ -5,6 +5,15 @@ All notable changes to RFHound. Versioning is [SemVer](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **Custom decode / demod functions for mods** — a new in-process software-decoder
+  layer (`rfhound.modules.demod`): dependency-free bit/byte primitives
+  (`manchester_decode`, `differential_decode`, `bits_to_bytes`, `crc8`) and
+  numpy IQ slicers (`ook_bits`, `fsk_bits`), plus a registry of named decoders.
+  Mods register their own with `api.add_soft_decoder(...)` (and can build on the
+  primitives via `api.demod`), so you can add a bespoke protocol decoder or
+  demodulator without wrapping an external tool. `rfhound mods decoders` lists
+  them (built-in + from mods) and `rfhound mods run <id> --bits/--hex` executes
+  one. The sample mod now demonstrates a Manchester+CRC8 frame decoder.
 - **Multiple RF sources — Wi-Fi & Bluetooth** (passive) — use the host PC's
   built-in Wi-Fi and Bluetooth adapters alongside the HackRF: `wifi scan`
   (APs + RSSI, evil-twin/open/rogue analysis), `ble scan` (devices + RSSI,

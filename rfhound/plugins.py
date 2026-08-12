@@ -30,6 +30,7 @@ from typing import Callable
 from . import bandplan
 from .bandplan import Band
 from .modules import decode as decode_mod
+from .modules import demod as demod_mod
 
 
 def mods_dir() -> Path:
@@ -45,6 +46,7 @@ class ModAPI:
     _detectors: dict[str, Callable] = field(default_factory=dict)
     added_bands: list[str] = field(default_factory=list)
     added_recipes: list[str] = field(default_factory=list)
+    added_decoders: list[str] = field(default_factory=list)
 
     def add_band(self, *, name, low_mhz, high_mhz, category, description,
                  decoder=None, center_mhz=None, region="mod", tags=()) -> None:
@@ -75,6 +77,20 @@ class ModAPI:
     def add_detector(self, name: str, fn: Callable) -> None:
         self._detectors[name] = fn
 
+    def add_soft_decoder(self, decoder_id: str, name: str, fn: Callable, *,
+                         kind: str = "bits", description: str = "") -> None:
+        """Register a pure-Python decode/demod function (see ``modules.demod``).
+
+        ``fn(payload, **opts)`` runs in-process; ``kind`` is ``bits``/``bytes``/
+        ``iq``. It shows up in ``rfhound mods decoders`` and ``mods run``.
+        """
+        demod_mod.register(decoder_id, name, fn, kind=kind, description=description,
+                           source="mod")
+        self.added_decoders.append(decoder_id)
+
+    # Handy re-exports so a mod can build decoders without importing internals.
+    demod = demod_mod
+
 
 @dataclass
 class LoadedMod:
@@ -84,6 +100,7 @@ class LoadedMod:
     bands: list[str]
     recipes: list[str]
     detectors: list[str]
+    decoders: list[str] = field(default_factory=list)
     error: str | None = None
 
 
@@ -117,7 +134,8 @@ def load_mods(directory: Path | None = None) -> list[LoadedMod]:
         loaded.append(LoadedMod(
             name=name, version=version, path=str(path),
             bands=api.added_bands, recipes=api.added_recipes,
-            detectors=list(api._detectors.keys()), error=error,
+            detectors=list(api._detectors.keys()), decoders=api.added_decoders,
+            error=error,
         ))
     return loaded
 
@@ -143,6 +161,21 @@ def register(api):
         return {"status": "ok"}
 
     api.add_detector("sample_health", health_check)
+
+    # Register your own decode function. It runs in-process on a payload
+    # (kind="bits" | "bytes" | "iq"). Here: Manchester-decode, pack to bytes,
+    # and verify a trailing CRC8 — using the built-in demod primitives.
+    def acme_decode(bits):
+        d = api.demod
+        payload = d.manchester_decode(bits)
+        data = d.bits_to_bytes([b or 0 for b in payload])
+        if not data:
+            return {"ok": False, "reason": "empty"}
+        body, crc = data[:-1], data[-1]
+        return {"ok": d.crc8(body) == crc, "bytes": data.hex()}
+
+    api.add_soft_decoder("acme", "Acme telemetry frame", acme_decode,
+                         kind="bits", description="Manchester + CRC8 frame")
 '''
 
 
