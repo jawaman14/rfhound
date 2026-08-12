@@ -12,7 +12,17 @@ enters/leaves a site, or when an expected AP disappears (jamming/theft).
 
 from __future__ import annotations
 
+import json
+import os
+import time
 from dataclasses import dataclass
+from pathlib import Path
+
+
+def events_path() -> Path:
+    base = os.environ.get("XDG_CONFIG_HOME")
+    root = Path(base) if base else (Path.home() / ".config")
+    return root / "rfhound" / "presence_events.log"
 
 
 @dataclass
@@ -97,6 +107,52 @@ def check_presence(watchlist: list, observations: list, *, prev_present: set | N
             findings.append(PresenceFinding(item.kind, item.id, name, "disappeared",
                             f"'{name}' ({item.id}) disappeared", None))
     return findings, present
+
+
+def record_events(findings: list, *, when: float | None = None) -> int:
+    """Append presence findings to the event history log (best-effort)."""
+    if not findings:
+        return 0
+    now = when if when is not None else time.time()
+    try:
+        p = events_path()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        with p.open("a") as fh:
+            for f in findings:
+                fh.write(json.dumps({
+                    "t": now, "kind": f.kind, "id": f.id, "label": f.label,
+                    "event": f.event, "rssi_dbm": f.rssi_dbm}) + "\n")
+    except OSError:
+        return 0
+    return len(findings)
+
+
+def read_events(limit: int = 100) -> list:
+    p = events_path()
+    if not p.exists():
+        return []
+    try:
+        lines = p.read_text().splitlines()
+    except OSError:
+        return []
+    out = []
+    for ln in lines[-limit:]:
+        try:
+            out.append(json.loads(ln))
+        except ValueError:
+            pass
+    return out
+
+
+def clear_events() -> int:
+    p = events_path()
+    n = len(read_events(10 ** 9))
+    try:
+        if p.exists():
+            p.unlink()
+    except OSError:
+        pass
+    return n
 
 
 def simulate_watchlist() -> list:

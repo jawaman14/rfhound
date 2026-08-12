@@ -116,6 +116,19 @@ def test_ble_persistent_device():
     assert any(f.indicator == "persistent" for f in findings)
 
 
+def test_classify_cod():
+    assert ble.classify_cod(0x200404) == "audio/video"
+    assert ble.classify_cod("0x5a020c") == "phone"
+    assert ble.classify_cod(0x000100) == "computer"
+    assert ble.classify_cod("nope") == ""
+
+
+def test_simulate_classic_devices():
+    devs = ble.simulate_classic()
+    assert all(d.tech == "classic" for d in devs)
+    assert any(d.kind == "phone" for d in devs)
+
+
 def test_ble_parse_btmgmt():
     text = (
         "hci0 dev_found: 11:22:33:44:55:66 type LE Random rssi -62 flags 0x0\n"

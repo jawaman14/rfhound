@@ -50,3 +50,36 @@ def test_presence_automation_task():
 def test_presence_empty_watchlist_no_alert():
     r = auto.run_task(Config(), {"name": "p", "task": "presence"}, simulate=True, prev=None)
     assert r.alert is False
+
+
+def test_event_history_roundtrip(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    presence.clear_events()
+    findings = [
+        presence.PresenceFinding("ble", "AirTag", "AirTag", "near", "d", rssi_dbm=-58.0),
+        presence.PresenceFinding("wifi", "HomeNet", "HomeNet", "appeared", "d"),
+    ]
+    assert presence.record_events(findings, when=1000.0) == 2
+    events = presence.read_events()
+    assert len(events) == 2
+    assert events[0]["event"] == "near" and events[0]["rssi_dbm"] == -58.0
+    assert events[1]["kind"] == "wifi" and events[1]["rssi_dbm"] is None
+    assert events[0]["t"] == 1000.0
+    assert presence.clear_events() == 2
+    assert presence.read_events() == []
+
+
+def test_read_events_respects_limit(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    presence.clear_events()
+    for i in range(10):
+        presence.record_events(
+            [presence.PresenceFinding("ble", f"D{i}", "", "appeared", "d")], when=float(i))
+    tail = presence.read_events(limit=3)
+    assert len(tail) == 3 and [e["id"] for e in tail] == ["D7", "D8", "D9"]
+
+
+def test_record_events_empty_is_noop(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    assert presence.record_events([]) == 0
+    assert presence.read_events() == []

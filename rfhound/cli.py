@@ -1611,6 +1611,14 @@ def cmd_ble(args: argparse.Namespace, cfg: Config) -> int:
         except RuntimeError as exc:
             console.error(f"BLE scan failed: {exc}")
             return 2
+    if getattr(args, "classic", False):
+        if sim:
+            devices = devices + ble.simulate_classic()
+        else:
+            try:
+                devices = devices + ble.scan_classic(seconds=args.seconds)
+            except RuntimeError as exc:
+                console.warn(f"Classic scan skipped: {exc}")
     from .modules import oui
     if getattr(args, "track", False):
         from .modules import sightings
@@ -1618,18 +1626,22 @@ def cmd_ble(args: argparse.Namespace, cfg: Config) -> int:
         sightings.ingest_ble(store, devices)
         console.info(f"Tracked {len(devices)} device(s) by address — see 'rfhound track list ble'.")
     findings = ble.analyze_ble(devices) if args.analyze else []
+
+    def _dbm(d):
+        return "—" if d.tech == "classic" else f"{d.rssi_dbm:.0f}"
     if args.json:
         console.raw(json.dumps({
             "devices": [{"addr": d.addr, "name": d.name, "rssi_dbm": d.rssi_dbm,
-                         "kind": d.kind, "vendor": oui.lookup(d.addr)} for d in devices],
+                         "tech": d.tech, "kind": d.kind, "vendor": oui.lookup(d.addr)}
+                        for d in devices],
             "findings": [{"indicator": f.indicator, "detail": f.detail,
                           "severity": f.severity} for f in findings]}, indent=2))
         return 0
-    console.rule("Bluetooth LE scan (passive)" + (" · SIMULATED" if sim else ""))
-    rows = [[d.name or "(unknown)", d.addr, oui.lookup(d.addr) or "—",
-             f"{d.rssi_dbm:.0f}", d.kind or "—"] for d in devices]
-    console.table(f"BLE devices ({len(devices)})",
-                  ["Name", "Address", "Vendor", "dBm", "Flags"], rows)
+    console.rule("Bluetooth scan (passive)" + (" · SIMULATED" if sim else ""))
+    rows = [[d.name or "(unknown)", d.addr, d.tech, oui.lookup(d.addr) or "—",
+             _dbm(d), d.kind or "—"] for d in devices]
+    console.table(f"Bluetooth devices ({len(devices)})",
+                  ["Name", "Address", "Tech", "Vendor", "dBm", "Flags"], rows)
     if args.analyze:
         if not findings:
             console.success("No tracker / persistent-device findings.")
@@ -1768,6 +1780,27 @@ def cmd_watch(args: argparse.Namespace, cfg: Config) -> int:
         cfg.watchlist = [w for w in cfg.watchlist if w.get("id") != args.id]
         save_config(cfg)
         console.success(f"Removed {before - len(cfg.watchlist)} watch item(s).")
+        return 0
+    if sub == "history":
+        import json
+        if args.clear:
+            n = presence.clear_events()
+            console.success(f"Cleared {n} presence event(s).")
+            return 0
+        events = presence.read_events(args.top)
+        if args.json:
+            console.raw(json.dumps(events, indent=2))
+            return 0
+        if not events:
+            console.warn("No presence events yet — run a 'presence' automation.")
+            return 0
+        import time as _t
+        rows = [[_t.strftime("%m-%d %H:%M:%S", _t.localtime(e["t"])), e["kind"],
+                 e.get("label") or e["id"], e["event"],
+                 f"{e['rssi_dbm']:.0f}" if e.get("rssi_dbm") is not None else "—"]
+                for e in events]
+        console.table(f"Presence events ({len(events)})",
+                      ["Time", "Kind", "Who", "Event", "dBm"], rows)
         return 0
     if sub == "check":
         from .modules import wifi
@@ -2228,10 +2261,12 @@ def build_parser() -> argparse.ArgumentParser:
                        help="Flag trackers / persistent devices")
     bscan.add_argument("--track", action="store_true",
                        help="Record devices (address + name + RSSI) to the sightings log")
+    bscan.add_argument("--classic", action="store_true",
+                       help="Also inquire classic (BR/EDR) devices (needs hcitool)")
     bscan.add_argument("--json", action="store_true", help="Machine-readable output")
     bscan.add_argument("--simulate", action="store_true")
     pble.set_defaults(func=cmd_ble, ble_cmd="scan", seconds=8, analyze=False,
-                      json=False, simulate=False, track=False)
+                      json=False, simulate=False, track=False, classic=False)
 
     phunt = sub.add_parser("hunt", help="Foxhunt a signal by RSSI (hotter/colder + distance)")
     phunt.add_argument("--source", choices=["wifi", "ble", "hackrf"], default="wifi")
@@ -2261,9 +2296,13 @@ def build_parser() -> argparse.ArgumentParser:
     wtrm.add_argument("id")
     wtck = wtsub.add_parser("check", help="Show current presence of the watchlist")
     wtck.add_argument("--simulate", action="store_true")
+    wth = wtsub.add_parser("history", help="Show the presence event timeline")
+    wth.add_argument("--top", type=int, default=100, help="Most recent N events")
+    wth.add_argument("--json", action="store_true")
+    wth.add_argument("--clear", action="store_true", help="Clear the event log")
     wtsub.add_parser("list", help="List the watchlist")
     pwatch.set_defaults(func=cmd_watch, watch_cmd="list", id=None, kind="any", on="appear",
-                        rssi=-60.0, label=None, simulate=False)
+                        rssi=-60.0, label=None, simulate=False, top=100, json=False, clear=False)
 
     pcfg = sub.add_parser("config", help="Show / init configuration")
     csub = pcfg.add_subparsers(dest="config_cmd")

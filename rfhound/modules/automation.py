@@ -230,6 +230,7 @@ def _task_presence(cfg, params, simulate, prev) -> AutoResult:
                 pass
     obs = presence.observations_from(aps=aps, devices=devices)
     findings, present = presence.check_presence(watch, obs, prev_present=set(prev) if prev else set())
+    presence.record_events(findings)   # append to the presence event history
     summary = f"{len(watch)} watched, {len(present)} present"
     if findings:
         summary += "; " + ", ".join(f"{f.event}:{f.label}" for f in findings)

@@ -40,6 +40,15 @@ All notable changes to RFHound. Versioning is [SemVer](https://semver.org/).
 - **PDF reports** — `rfhound recon --report survey.pdf` (any `.pdf` path) renders
   a situational-awareness PDF via a dependency-free, pure-stdlib writer (PDF
   base-14 fonts, no reportlab/weasyprint) — keeping the light-core promise.
+- **Classic Bluetooth (BR/EDR)** — `ble scan --classic` also inquires classic
+  devices (via `hcitool`) alongside BLE, so phones/headsets/laptops that never
+  advertise over LE show up too. Class-of-Device major class (phone,
+  audio/video, computer, …) is decoded into the device kind; passive inquiry
+  only — no pairing, spoofing, or attacks.
+- **Presence event history** — every appear/disappear/near transition from a
+  `presence` automation is appended to a JSONL timeline; `watch history` shows
+  the recent events (`--top N`, `--json`, `--clear`) so you get an auditable
+  record of when a watched identifier came and went.
 
 ## [1.3.0] — 2026-08-08
 
