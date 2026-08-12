@@ -35,6 +35,8 @@
   .nav a{padding:9px 11px;border-radius:9px;color:var(--dim);font-size:14px;font-weight:600;display:flex;gap:9px;align-items:center}
   .nav a:hover{background:var(--panel2);color:var(--text)}
   .nav a.active{background:var(--panel2);color:var(--accent)}
+  .nav .group{font-size:10px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--dim);opacity:.55;padding:13px 11px 3px}
+  .nav .group:first-of-type{padding-top:2px}
   .side .foot{font-size:11px;color:var(--dim);border-top:1px solid var(--border);padding-top:10px}
   .main{padding:16px 22px 40px;max-width:1600px}
   /* Receiver bar */
@@ -163,22 +165,29 @@
   <aside class="side">
     <div class="brand"><span class="dot"></span> <span>RFHound<small>RF situational awareness</small></span></div>
     <nav class="nav">
+      <div class="group">Monitor</div>
       <a href="#spectrum" class="active">📈 Spectrum</a>
       <a href="#recon">🛰️ Recon</a>
-      <a href="#threats">🛡️ Threats</a>
       <a href="#capture">⏺️ Capture</a>
       <a href="#recordings">💾 Recordings</a>
-      <a href="#emitters">📇 Emitters (EOB)</a>
-      <a href="#sightings">🔎 Sightings</a>
+      <div class="group">Signals</div>
       <a href="#wifi">📶 Wi-Fi</a>
       <a href="#ble">🔵 Bluetooth</a>
+      <a href="#sightings">🔎 Sightings</a>
       <a href="#foxhunt">🎯 Foxhunt</a>
-      <a href="#presence">🚨 Presence</a>
+      <div class="group">Intel</div>
       <a href="#contacts">🛰️ Contacts map</a>
+      <a href="#emitters">📇 Emitters (EOB)</a>
+      <a href="#presence">🚨 Presence</a>
+      <div class="group">Defense</div>
+      <a href="#threats">🛡️ Threats</a>
+      <div class="group">Reference</div>
       <a href="#bands">📚 Knowledge base</a>
+      <a href="#bookmarks">⭐ Bookmarks</a>
+      <div class="group">System</div>
       <a href="#diagnostics">🩺 Diagnostics</a>
       <a href="#settings">🎛️ Settings</a>
-      <a href="#system">⚙️ System</a>
+      <a href="#system">⚙️ Hardware &amp; tools</a>
     </nav>
     <div class="foot">Receive-and-analyse only.<br>No transmit endpoint.<br><span id="ver2"></span></div>
   </aside>
@@ -261,23 +270,12 @@
     </div>
 
     <div class="grid">
+      <!-- ===== Monitor ===== -->
       <!-- Recon -->
       <div class="card section" id="recon">
         <h2>Recon survey <span class="exp"><button id="expReconCsv">⇩ CSV</button><button id="expReconJson">⇩ JSON</button></span></h2>
         <div class="row"><button id="reconBtn">Run recon</button><span class="muted" id="reconInfo"></span></div>
         <div class="scroll"><table id="reconTbl"><thead><tr><th>Band</th><th>Status</th><th>Peaks</th><th>Strongest</th><th>Decoder</th></tr></thead><tbody></tbody></table></div>
-      </div>
-
-      <!-- Threats -->
-      <div class="card section" id="threats">
-        <h2>Threat detection</h2>
-        <div class="row">
-          <button id="droneBtn" class="ghost">Counter-UAS</button>
-          <button id="adsbBtn" class="ghost">ADS-B spoof</button>
-          <button id="imsiBtn" class="ghost">IMSI catcher</button>
-          <button id="hopBtn" class="ghost">Hop detect</button>
-        </div>
-        <div id="threatOut" class="scroll"><p class="muted">Run a check to populate.</p></div>
       </div>
 
       <!-- Capture (receive-only) -->
@@ -298,18 +296,7 @@
         <div class="scroll"><table id="recTbl"><thead><tr><th>Name</th><th>Freq</th><th>Length</th><th>Classification</th></tr></thead><tbody></tbody></table></div>
       </div>
 
-      <!-- Emitters / EOB -->
-      <div class="card section" id="emitters">
-        <h2>Emitters — Electronic Order of Battle <span class="exp"><button id="eobRefresh">⟳</button><button id="expEobCsv">⇩ CSV</button></span></h2>
-        <div class="scroll"><table id="eobTbl"><thead><tr><th>Freq (MHz)</th><th>ITU</th><th>Likely</th><th>Max dB</th><th>Seen</th></tr></thead><tbody></tbody></table></div>
-      </div>
-
-      <!-- Sightings -->
-      <div class="card section" id="sightings">
-        <h2>Sightings — decoded IDs <span class="exp"><button id="sightRefresh">⟳</button></span></h2>
-        <div class="scroll"><table id="sightTbl"><thead><tr><th>Kind</th><th>ID</th><th>Label</th><th>dBm</th><th>RSSI trend</th><th>Count</th></tr></thead><tbody></tbody></table></div>
-      </div>
-
+      <!-- ===== Signals ===== -->
       <!-- Wi-Fi -->
       <div class="card section" id="wifi">
         <h2>Wi-Fi access points <span class="exp"><button id="wifiRefresh">⟳</button></span></h2>
@@ -322,6 +309,12 @@
         <h2>Bluetooth LE devices <span class="exp"><button id="bleRefresh">⟳</button></span></h2>
         <div class="scroll"><table id="bleTbl"><thead><tr><th>Name</th><th>Address</th><th>Vendor</th><th>dBm</th><th>Flags</th></tr></thead><tbody></tbody></table></div>
         <div id="bleFindings" class="muted" style="margin-top:6px"></div>
+      </div>
+
+      <!-- Sightings -->
+      <div class="card section" id="sightings">
+        <h2>Sightings — decoded IDs <span class="exp"><button id="sightRefresh">⟳</button></span></h2>
+        <div class="scroll"><table id="sightTbl"><thead><tr><th>Kind</th><th>ID</th><th>Label</th><th>dBm</th><th>RSSI trend</th><th>Count</th></tr></thead><tbody></tbody></table></div>
       </div>
 
       <!-- Foxhunt (RSSI locate) -->
@@ -344,6 +337,22 @@
         <div class="muted" id="huntTrend" style="text-align:center;font-weight:700"></div>
       </div>
 
+      <!-- ===== Intel ===== -->
+      <!-- Contacts map (ADS-B aircraft / AIS vessels with RSSI) -->
+      <div class="card section" id="contacts">
+        <h2>Contacts map — ADS-B / AIS <span class="exp"><button id="ctcGeojson">⇩ GeoJSON</button><button id="ctcRefresh">⟳</button></span></h2>
+        <p class="muted" style="margin:0 0 8px">Decoded aircraft (✈) and vessels (⚓) plotted by position; marker colour/size encodes RSSI. Receive-only.</p>
+        <canvas id="contactsMap" height="300" style="width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:10px"></canvas>
+        <div class="scroll" style="margin-top:8px"><table id="ctcTbl"><thead><tr><th>Type</th><th>ID</th><th>Label</th><th>Lat</th><th>Lon</th><th>dBm</th><th>Info</th></tr></thead><tbody></tbody></table></div>
+        <div class="muted" id="ctcMsg" style="margin-top:6px"></div>
+      </div>
+
+      <!-- Emitters / EOB -->
+      <div class="card section" id="emitters">
+        <h2>Emitters — Electronic Order of Battle <span class="exp"><button id="eobRefresh">⟳</button><button id="expEobCsv">⇩ CSV</button></span></h2>
+        <div class="scroll"><table id="eobTbl"><thead><tr><th>Freq (MHz)</th><th>ITU</th><th>Likely</th><th>Max dB</th><th>Seen</th></tr></thead><tbody></tbody></table></div>
+      </div>
+
       <!-- Presence / geofence -->
       <div class="card section" id="presence">
         <h2>Presence — watchlist <span class="exp"><button id="presRefresh">⟳</button></span></h2>
@@ -362,13 +371,30 @@
         <div class="muted" id="presMsg" style="margin-top:6px"></div>
       </div>
 
-      <!-- Contacts map (ADS-B aircraft / AIS vessels with RSSI) -->
-      <div class="card section" id="contacts">
-        <h2>Contacts map — ADS-B / AIS <span class="exp"><button id="ctcGeojson">⇩ GeoJSON</button><button id="ctcRefresh">⟳</button></span></h2>
-        <p class="muted" style="margin:0 0 8px">Decoded aircraft (✈) and vessels (⚓) plotted by position; marker colour/size encodes RSSI. Receive-only.</p>
-        <canvas id="contactsMap" height="300" style="width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:10px"></canvas>
-        <div class="scroll" style="margin-top:8px"><table id="ctcTbl"><thead><tr><th>Type</th><th>ID</th><th>Label</th><th>Lat</th><th>Lon</th><th>dBm</th><th>Info</th></tr></thead><tbody></tbody></table></div>
-        <div class="muted" id="ctcMsg" style="margin-top:6px"></div>
+      <!-- ===== Defense ===== -->
+      <!-- Threats -->
+      <div class="card section" id="threats">
+        <h2>Threat detection</h2>
+        <div class="row">
+          <button id="droneBtn" class="ghost">Counter-UAS</button>
+          <button id="adsbBtn" class="ghost">ADS-B spoof</button>
+          <button id="imsiBtn" class="ghost">IMSI catcher</button>
+          <button id="hopBtn" class="ghost">Hop detect</button>
+        </div>
+        <div id="threatOut" class="scroll"><p class="muted">Run a check to populate.</p></div>
+      </div>
+
+      <!-- ===== Reference ===== -->
+      <!-- Bands -->
+      <div class="card section" id="bands">
+        <h2>Frequency knowledge base <span class="exp"><button id="expBandsCsv">⇩ CSV</button><button id="expBandsJson">⇩ JSON</button></span></h2>
+        <div class="row">
+          <label>At</label><input type="number" id="atFreq" value="433.92" step="0.01" style="width:110px"><span class="muted">MHz</span>
+          <button id="atBtn" class="ghost">What's here?</button>
+        </div>
+        <div id="atOut" class="muted" style="margin-bottom:10px"></div>
+        <div class="row"><label>Search</label><input type="text" id="bandSearch" placeholder="tpms, adsb, drone, cellular…"></div>
+        <div class="scroll"><table id="bandsTbl"><thead><tr><th>Range (MHz)</th><th>Name</th><th>Category</th><th>Decoder</th></tr></thead><tbody></tbody></table></div>
       </div>
 
       <!-- Bookmarks -->
@@ -385,18 +411,7 @@
         <div class="muted" id="bmMsg" style="margin-top:6px"></div>
       </div>
 
-      <!-- Bands -->
-      <div class="card section" id="bands">
-        <h2>Frequency knowledge base <span class="exp"><button id="expBandsCsv">⇩ CSV</button><button id="expBandsJson">⇩ JSON</button></span></h2>
-        <div class="row">
-          <label>At</label><input type="number" id="atFreq" value="433.92" step="0.01" style="width:110px"><span class="muted">MHz</span>
-          <button id="atBtn" class="ghost">What's here?</button>
-        </div>
-        <div id="atOut" class="muted" style="margin-bottom:10px"></div>
-        <div class="row"><label>Search</label><input type="text" id="bandSearch" placeholder="tpms, adsb, drone, cellular…"></div>
-        <div class="scroll"><table id="bandsTbl"><thead><tr><th>Range (MHz)</th><th>Name</th><th>Category</th><th>Decoder</th></tr></thead><tbody></tbody></table></div>
-      </div>
-
+      <!-- ===== System ===== -->
       <!-- Diagnostics / self-test -->
       <div class="card section" id="diagnostics">
         <h2>Diagnostics — self-test <span class="exp"><button id="diagRefresh">⟳ Run</button></span></h2>
