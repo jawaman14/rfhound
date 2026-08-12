@@ -11,10 +11,13 @@ Transmit-safety fields are deliberately *not* here: those go through the gated
 
 from __future__ import annotations
 
+import json
+import re
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable
 
-from .config import Config
+from .config import Config, config_path, save_config
 
 
 @dataclass(frozen=True)
@@ -123,3 +126,63 @@ def current(cfg: Config) -> list[dict]:
         out.append({"key": s.key, "kind": s.kind, "value": getattr(cfg, s.key, None),
                     "help": s.help, "choices": list(s.choices)})
     return out
+
+
+# --------------------------------------------------------------------------- #
+# Profiles — named presets of the editable settings (e.g. "airband", "ism433").
+# Stored one JSON file per profile under <config_dir>/profiles/. Only the
+# editable surface is saved/restored; transmit-safety and secrets stay put.
+# --------------------------------------------------------------------------- #
+_NAME_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+
+
+def profiles_dir() -> Path:
+    return config_path().parent / "profiles"
+
+
+def _profile_path(name: str) -> Path:
+    if not _NAME_RE.match(name):
+        raise ValueError("profile name must be 1-64 chars of letters/digits/._-")
+    return profiles_dir() / f"{name}.json"
+
+
+def list_profiles() -> list[str]:
+    d = profiles_dir()
+    if not d.exists():
+        return []
+    return sorted(p.stem for p in d.glob("*.json"))
+
+
+def save_profile(cfg: Config, name: str) -> Path:
+    """Write the current editable settings as a named profile."""
+    path = _profile_path(name)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    data = {s.key: getattr(cfg, s.key, None) for s in EDITABLE}
+    path.write_text(json.dumps(data, indent=2))
+    return path
+
+
+def load_profile(cfg: Config, name: str) -> list[str]:
+    """Apply a saved profile onto *cfg* (validated) and persist. Returns applied keys."""
+    path = _profile_path(name)
+    if not path.exists():
+        raise FileNotFoundError(f"no profile named '{name}' (see: config profile list)")
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, ValueError) as exc:
+        raise ValueError(f"could not read profile '{name}': {exc}") from exc
+    applied = []
+    for key, raw in data.items():
+        if key in _BY_KEY:
+            set_value(cfg, key, raw)   # re-validate on load
+            applied.append(key)
+    save_config(cfg)
+    return applied
+
+
+def delete_profile(name: str) -> bool:
+    path = _profile_path(name)
+    if path.exists():
+        path.unlink()
+        return True
+    return False

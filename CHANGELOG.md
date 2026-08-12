@@ -71,6 +71,15 @@ All notable changes to RFHound. Versioning is [SemVer](https://semver.org/).
   concurrently. `sources --scan` now scans HackRF + Wi-Fi + BLE in parallel, and
   the self-test probes tools concurrently; worker count is the `scan_workers`
   setting. One failing job never sinks the batch — you get its error back.
+- **`contacts` command + map export** — `rfhound contacts` lists decoded ADS-B
+  aircraft / AIS vessels with RSSI and position (`--json`), and exports them to
+  `--geojson`/`--kml` for QGIS / Google Earth (generic multi-point
+  `geo.points_geojson` / `geo.points_kml`). The dashboard Contacts panel gains a
+  one-click **⇩ GeoJSON** download of the current contacts.
+- **Setting profiles** — `config profile save/load/list/delete <name>` stores
+  named presets of the editable settings (e.g. an `airband` vs `ism433` rig
+  setup) under `~/.config/rfhound/profiles/`; loading re-validates every value.
+  Also reachable from the interactive Settings menu.
 
 ## [1.3.0] — 2026-08-08
 

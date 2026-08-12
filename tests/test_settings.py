@@ -104,3 +104,39 @@ def test_output_dir_check_fails_on_bad_path():
     checks = diagnostics.run_diagnostics(cfg, deep=False)
     outdir = [c for c in checks if c.name == "Output dir"][0]
     assert outdir.status == "fail" and outdir.hint
+
+
+# --- profiles ---
+def test_profile_save_load_roundtrip(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    cfg = Config()
+    settings.set_value(cfg, "lna_gain", 24)
+    settings.set_value(cfg, "amp_enable", True)
+    settings.save_profile(cfg, "airband")
+    assert "airband" in settings.list_profiles()
+    # Mutate, then restore from the profile.
+    settings.set_value(cfg, "lna_gain", 8)
+    settings.set_value(cfg, "amp_enable", False)
+    applied = settings.load_profile(cfg, "airband")
+    assert "lna_gain" in applied
+    assert cfg.lna_gain == 24 and cfg.amp_enable is True
+
+
+def test_profile_load_missing_raises(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    with pytest.raises(FileNotFoundError):
+        settings.load_profile(Config(), "ghost")
+
+
+def test_profile_delete(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    settings.save_profile(Config(), "tmp")
+    assert settings.delete_profile("tmp") is True
+    assert settings.delete_profile("tmp") is False        # already gone
+    assert settings.list_profiles() == []
+
+
+def test_profile_rejects_bad_name(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    with pytest.raises(ValueError):
+        settings.save_profile(Config(), "../escape")

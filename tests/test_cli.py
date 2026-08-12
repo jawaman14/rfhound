@@ -210,3 +210,35 @@ def test_sources_scan_parallel_simulated(capsys):
     out = capsys.readouterr().out
     assert rc == 0
     assert "HackRF" in out and "Wi-Fi" in out and "BLE" in out
+
+
+def test_contacts_table_simulated(capsys):
+    rc = run(["--simulate", "contacts"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "BAW117" in out and "RED FALCON" in out
+
+
+def test_contacts_json_and_export(tmp_path, capsys):
+    gj = tmp_path / "c.geojson"
+    kml = tmp_path / "c.kml"
+    rc = run(["--simulate", "contacts", "--json", "--geojson", str(gj), "--kml", str(kml)])
+    assert rc == 0
+    capsys.readouterr()
+    assert gj.exists() and kml.exists()
+    fc = json.loads(gj.read_text())
+    assert fc["type"] == "FeatureCollection" and len(fc["features"]) == 4
+    assert fc["features"][0]["properties"]["rssi_dbm"] == -62.0
+
+
+def test_config_profile_cli_roundtrip(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    assert run(["config", "set", "vga_gain", "40"]) == 0
+    assert run(["config", "profile", "save", "myp"]) == 0
+    assert run(["config", "set", "vga_gain", "20"]) == 0
+    assert run(["config", "profile", "load", "myp"]) == 0
+    capsys.readouterr()
+    assert run(["config", "get", "vga_gain"]) == 0
+    assert capsys.readouterr().out.strip() == "40"
+    assert run(["config", "profile", "list"]) == 0
+    assert "myp" in capsys.readouterr().out

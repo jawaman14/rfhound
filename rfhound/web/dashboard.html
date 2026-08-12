@@ -364,7 +364,7 @@
 
       <!-- Contacts map (ADS-B aircraft / AIS vessels with RSSI) -->
       <div class="card section" id="contacts">
-        <h2>Contacts map — ADS-B / AIS <span class="exp"><button id="ctcRefresh">⟳</button></span></h2>
+        <h2>Contacts map — ADS-B / AIS <span class="exp"><button id="ctcGeojson">⇩ GeoJSON</button><button id="ctcRefresh">⟳</button></span></h2>
         <p class="muted" style="margin:0 0 8px">Decoded aircraft (✈) and vessels (⚓) plotted by position; marker colour/size encodes RSSI. Receive-only.</p>
         <canvas id="contactsMap" height="300" style="width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:10px"></canvas>
         <div class="scroll" style="margin-top:8px"><table id="ctcTbl"><thead><tr><th>Type</th><th>ID</th><th>Label</th><th>Lat</th><th>Lon</th><th>dBm</th><th>Info</th></tr></thead><tbody></tbody></table></div>
@@ -751,6 +751,10 @@ async function loadContacts(){ try{
   d.contacts.forEach(c=>tb.insertAdjacentHTML('beforeend',
     `<tr><td>${c.kind==='aircraft'?'✈ air':'⚓ sea'}</td><td>${esc(c.id)}</td><td class=muted>${esc(c.label||'—')}</td><td>${c.lat.toFixed(3)}</td><td>${c.lon.toFixed(3)}</td><td>${c.rssi_dbm.toFixed(0)}</td><td class=muted>${esc(c.detail||'—')}</td></tr>`));
 }catch(e){console.error(e);} }
+function exportContactsGeojson(){ if(!lastContacts.length){setMsg&&setMsg('No contacts to export.',true);return;}
+  const feats=lastContacts.map(c=>({type:'Feature',geometry:{type:'Point',coordinates:[+c.lon.toFixed(6),+c.lat.toFixed(6)]},
+    properties:{kind:c.kind,id:c.id,label:c.label,rssi_dbm:c.rssi_dbm,detail:c.detail}}));
+  download('rfhound-contacts.geojson',JSON.stringify({type:'FeatureCollection',features:feats},null,2),'application/geo+json'); }
 
 // ---- diagnostics / self-test ----
 async function loadDiagnostics(){ try{
@@ -866,6 +870,7 @@ $('#wifiRefresh').onclick=loadWifi;$('#bleRefresh').onclick=loadBle;$('#huntBtn'
 $('#presRefresh').onclick=loadPresence;$('#watchAddBtn').onclick=addWatch;
 $('#ctcRefresh').onclick=loadContacts;
 $('#diagRefresh').onclick=loadDiagnostics;$('#setRefresh').onclick=loadSettings;
+$('#ctcGeojson').onclick=exportContactsGeojson;
 $('#expPeaksCsv').onclick=()=>exportPeaks('csv');$('#expPeaksJson').onclick=()=>exportPeaks('json');
 $('#expReconCsv').onclick=()=>exportRecon('csv');$('#expReconJson').onclick=()=>exportRecon('json');
 $('#expBandsCsv').onclick=()=>exportBands('csv');$('#expBandsJson').onclick=()=>exportBands('json');

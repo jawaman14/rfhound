@@ -349,14 +349,18 @@ def _menu_settings(cfg: Config) -> None:
             console.print_(f"  {i:>2}. {s['key']:<20} = {_fmt(s['value'])}   "
                            f"[dim]{s['help']}[/dim]" if console.have_rich()
                            else f"  {i:>2}. {s['key']:<20} = {_fmt(s['value'])}   {s['help']}")
-        console.print_(f"  {len(items) + 1:>2}. Back")
-        choice = console.ask("Edit which #", default=str(len(items) + 1)).strip()
+        console.print_(f"  {len(items) + 1:>2}. Profiles (save / load presets)")
+        console.print_(f"  {len(items) + 2:>2}. Back")
+        choice = console.ask("Edit which #", default=str(len(items) + 2)).strip()
         try:
             n = int(choice)
         except ValueError:
             console.warn("Enter a number.")
             continue
-        if n == len(items) + 1 or n < 1 or n > len(items):
+        if n == len(items) + 1:
+            _menu_profiles(cfg)
+            continue
+        if n == len(items) + 2 or n < 1 or n > len(items):
             return
         s = items[n - 1]
         setting = settings.get_setting(s["key"])
@@ -371,6 +375,33 @@ def _menu_settings(cfg: Config) -> None:
             console.success(f"{s['key']} = {_fmt(value)}")
         except (ValueError, KeyError) as exc:
             console.error(f"Invalid: {exc}")
+
+
+def _menu_profiles(cfg: Config) -> None:
+    from . import settings
+    console.rule("Setting profiles")
+    names = settings.list_profiles()
+    console.print_("Saved: " + (", ".join(names) if names else "(none)"))
+    action = console.ask("Action", default="back",
+                         choices=["save", "load", "delete", "back"]).strip().lower()
+    if action == "back" or not action:
+        return
+    name = console.ask("Profile name").strip()
+    if not name:
+        return
+    try:
+        if action == "save":
+            settings.save_profile(cfg, name)
+            console.success(f"Saved profile '{name}'.")
+        elif action == "load":
+            applied = settings.load_profile(cfg, name)
+            console.success(f"Loaded '{name}' ({len(applied)} setting(s)).")
+        elif action == "delete":
+            ok = settings.delete_profile(name)
+            (console.success if ok else console.warn)(
+                f"Deleted '{name}'." if ok else f"No profile '{name}'.")
+    except (ValueError, FileNotFoundError) as exc:
+        console.error(str(exc))
 
 
 def _fmt(value) -> str:

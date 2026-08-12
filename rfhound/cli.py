@@ -1556,6 +1556,34 @@ def cmd_config(args: argparse.Namespace, cfg: Config) -> int:
         save_config(cfg)
         console.success(f"{args.key} = {_fmt_setting(value)}")
         return 0
+    if args.config_cmd == "profile":
+        from . import settings
+        action = args.profile_cmd
+        if action == "list":
+            names = settings.list_profiles()
+            if not names:
+                console.print_("(no profiles yet — save one: rfhound config profile save <name>)")
+            else:
+                console.table("Profiles", ["Name"], [[n] for n in names])
+            return 0
+        if action == "save":
+            path = settings.save_profile(cfg, args.name)
+            console.success(f"Saved profile '{args.name}' → {path}")
+            return 0
+        if action == "load":
+            try:
+                applied = settings.load_profile(cfg, args.name)
+            except (FileNotFoundError, ValueError) as exc:
+                console.error(str(exc))
+                return 2
+            console.success(f"Loaded profile '{args.name}' ({len(applied)} setting(s) applied).")
+            return 0
+        if action == "delete":
+            if settings.delete_profile(args.name):
+                console.success(f"Deleted profile '{args.name}'.")
+            else:
+                console.warn(f"No profile named '{args.name}'.")
+            return 0
     if args.config_cmd == "init":
         path = save_config(cfg)
         console.success(f"Wrote default config to {path}")
@@ -1783,6 +1811,38 @@ def cmd_sources(args: argparse.Namespace, cfg: Config) -> int:
     console.table("Passive sources", ["Source", "Available", "Notes"], rows)
     console.print_("Scan all at once: rfhound sources --scan   (add --simulate to demo)")
     console.print_("Locate by RSSI: rfhound hunt --source wifi --target <SSID/BSSID>")
+    return 0
+
+
+def cmd_contacts(args: argparse.Namespace, cfg: Config) -> int:
+    """List positioned ADS-B aircraft / AIS vessel contacts (with RSSI); export to map."""
+    import json
+    from .modules import intel
+    from .modules import geo
+    sim = args.simulate or cfg.simulate_mode
+    contacts = intel.simulate_contacts() if sim else intel.contacts_from_messages()
+    points = [{"kind": c.kind, "id": c.id, "label": c.label, "lat": c.lat, "lon": c.lon,
+               "rssi_dbm": c.rssi_dbm, "detail": c.detail} for c in contacts]
+
+    if args.json:
+        console.raw(json.dumps({"simulated": sim, "contacts": points}, indent=2))
+    else:
+        console.rule("Contacts — ADS-B / AIS" + (" · SIMULATED" if sim else ""))
+        if not contacts:
+            console.warn("No contacts. Use --simulate to demo, or feed a live decoder.")
+        else:
+            rows = [["✈ air" if c.kind == "aircraft" else "⚓ sea", c.id, c.label or "—",
+                     f"{c.lat:.3f}", f"{c.lon:.3f}", f"{c.rssi_dbm:.0f}", c.detail or "—"]
+                    for c in contacts]
+            console.table(f"Contacts ({len(contacts)})",
+                          ["Type", "ID", "Label", "Lat", "Lon", "dBm", "Info"], rows)
+
+    if getattr(args, "geojson", None):
+        geo.write_geojson(args.geojson, geo.points_geojson(points))
+        console.success(f"Wrote {len(points)} contact(s) → {args.geojson}")
+    if getattr(args, "kml", None):
+        geo.write_kml(args.kml, geo.points_kml(points))
+        console.success(f"Wrote {len(points)} contact(s) → {args.kml}")
     return 0
 
 
@@ -2320,6 +2380,14 @@ def build_parser() -> argparse.ArgumentParser:
     psrc.add_argument("--simulate", action="store_true")
     psrc.set_defaults(func=cmd_sources, scan=False, simulate=False)
 
+    pcon = sub.add_parser("contacts",
+                          help="List ADS-B/AIS contacts (RSSI + position); export GeoJSON/KML")
+    pcon.add_argument("--simulate", action="store_true")
+    pcon.add_argument("--json", action="store_true")
+    pcon.add_argument("--geojson", metavar="FILE", help="Write contacts as GeoJSON")
+    pcon.add_argument("--kml", metavar="FILE", help="Write contacts as KML (Google Earth)")
+    pcon.set_defaults(func=cmd_contacts, simulate=False, json=False, geojson=None, kml=None)
+
     pwifi = sub.add_parser("wifi", help="Passive Wi-Fi AP scan (host adapter) with RSSI")
     wsub = pwifi.add_subparsers(dest="wifi_cmd")
     wscan = wsub.add_parser("scan", help="Scan for access points")
@@ -2400,6 +2468,16 @@ def build_parser() -> argparse.ArgumentParser:
     cset = csub.add_parser("set", help="Change one setting (validated)")
     cset.add_argument("key")
     cset.add_argument("value")
+    cprof = csub.add_parser("profile", help="Save/load named setting presets")
+    prsub = cprof.add_subparsers(dest="profile_cmd")
+    prsub.add_parser("list", help="List saved profiles")
+    prsave = prsub.add_parser("save", help="Save current settings as a profile")
+    prsave.add_argument("name")
+    prload = prsub.add_parser("load", help="Apply a saved profile")
+    prload.add_argument("name")
+    prdel = prsub.add_parser("delete", help="Delete a profile")
+    prdel.add_argument("name")
+    cprof.set_defaults(profile_cmd="list", name=None)
     csmtp = csub.add_parser("smtp", help="Configure SMTP for email alerts")
     csmtp.add_argument("--host")
     csmtp.add_argument("--port", type=int)

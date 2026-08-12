@@ -34,6 +34,21 @@ def write_geojson(path: str | Path, fc: dict) -> Path:
     return p
 
 
+def points_geojson(points: list) -> dict:
+    """A FeatureCollection from a list of ``{lat, lon, ...props}`` dicts.
+
+    Any keys other than ``lat``/``lon`` become feature properties, so decoded
+    contacts (aircraft/vessels) with RSSI drop straight onto a map.
+    """
+    feats = []
+    for pt in points or []:
+        if pt.get("lat") is None or pt.get("lon") is None:
+            continue
+        props = {k: v for k, v in pt.items() if k not in ("lat", "lon")}
+        feats.append(_feature(pt["lat"], pt["lon"], props))
+    return {"type": "FeatureCollection", "features": feats}
+
+
 def _xesc(s: str) -> str:
     return (str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
             .replace('"', "&quot;"))
@@ -53,6 +68,26 @@ def fix_kml(lat: float, lon: float, props: dict, nodes: list | None = None) -> s
             continue
         parts.append(placemark(str(n.get("node") or n.get("node_id") or "receiver"),
                                n["lat"], n["lon"], "receiver"))
+    return ('<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<kml xmlns="http://www.opengis.net/kml/2.2"><Document>'
+            + "".join(parts) + "</Document></kml>\n")
+
+
+def points_kml(points: list, *, name_key: str = "label") -> str:
+    """A KML document with one placemark per ``{lat, lon, ...props}`` point."""
+    def placemark(nm, la, lo, desc):
+        return (f"<Placemark><name>{_xesc(nm)}</name>"
+                f"<description>{_xesc(desc)}</description>"
+                f"<Point><coordinates>{lo:.6f},{la:.6f},0</coordinates></Point></Placemark>")
+
+    parts = []
+    for pt in points or []:
+        if pt.get("lat") is None or pt.get("lon") is None:
+            continue
+        props = {k: v for k, v in pt.items() if k not in ("lat", "lon")}
+        nm = props.get(name_key) or props.get("id") or "point"
+        desc = "; ".join(f"{k}={v}" for k, v in props.items())
+        parts.append(placemark(str(nm), pt["lat"], pt["lon"], desc))
     return ('<?xml version="1.0" encoding="UTF-8"?>\n'
             '<kml xmlns="http://www.opengis.net/kml/2.2"><Document>'
             + "".join(parts) + "</Document></kml>\n")

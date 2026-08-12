@@ -55,3 +55,24 @@ def test_geo_kml_valid_xml(tmp_path):
 def test_geo_kml_escapes_xml():
     kml = geo.fix_kml(51.5, -0.12, {"note": "a & b <x>"})
     assert "&amp;" in kml and "&lt;x&gt;" in kml
+
+
+def test_points_geojson_multi():
+    pts = [{"lat": 51.5, "lon": -0.1, "id": "a", "rssi_dbm": -60},
+           {"lat": 50.9, "lon": -1.4, "id": "b", "rssi_dbm": -71},
+           {"lat": None, "lon": 1.0, "id": "skip"}]     # dropped (no lat)
+    fc = geo.points_geojson(pts)
+    assert fc["type"] == "FeatureCollection" and len(fc["features"]) == 2
+    f0 = fc["features"][0]
+    assert f0["geometry"]["coordinates"] == [-0.1, 51.5]     # [lon, lat]
+    assert f0["properties"]["id"] == "a" and f0["properties"]["rssi_dbm"] == -60
+    assert "lat" not in f0["properties"]                     # lat/lon not duplicated
+
+
+def test_points_kml_valid(tmp_path):
+    import xml.dom.minidom as minidom
+    pts = [{"lat": 51.5, "lon": -0.1, "label": "BAW117", "rssi_dbm": -62}]
+    kml = geo.points_kml(pts)
+    assert "<name>BAW117</name>" in kml
+    out = geo.write_kml(tmp_path / "c.kml", kml)
+    minidom.parse(str(out))
