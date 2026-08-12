@@ -108,6 +108,11 @@ All notable changes to RFHound. Versioning is [SemVer](https://semver.org/).
   (matching `hop-detect`) rather than the offensive device, which read wrongly
   for a receive-only tool. `imsi-catcher` stays as a backward-compatible alias.
 
+### Fixed
+- **Webhook socket leak** — the automation webhook POST now closes the response
+  via a context manager, fixing a `ResourceWarning` (leaked TCP socket) that
+  accumulated over a long-running automation loop.
+
 ## [1.3.0] — 2026-08-08
 
 A ground-up dashboard rebuild plus a broad "beef up" pass: dashboard capture and

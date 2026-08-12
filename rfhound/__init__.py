@@ -1,4 +1,5 @@
-"""RFHound - a friendly, powerful HackRF reconnaissance & pentesting toolkit.
+"""RFHound - a friendly, powerful, receive-first HackRF reconnaissance & RF
+situational-awareness toolkit.
 
 RFHound is an *orchestration layer*. It does not re-implement DSP; instead it
 drives best-of-breed command line tools (``hackrf_sweep``, ``hackrf_transfer``,

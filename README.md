@@ -1,7 +1,7 @@
 # RFHound 🐕‍🦺📡
 
 **A friendly, powerful HackRF reconnaissance & RF situational-awareness toolkit.**
-_Version 1.3 · receive-first · 289 tests · MIT._
+_Version 1.3 · receive-first · 385 tests · MIT._
 
 ```bash
 pip install rfhound            # once published to PyPI

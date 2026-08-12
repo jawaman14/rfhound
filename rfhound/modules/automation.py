@@ -273,7 +273,8 @@ def _post_webhook(url: str, payload: dict) -> None:
         req = urllib.request.Request(
             url, data=json.dumps(payload).encode(),
             headers={"Content-Type": "application/json"}, method="POST")
-        urllib.request.urlopen(req, timeout=8).read()
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            resp.read()
     except Exception as exc:  # best-effort; never break the loop
         console.debug(f"webhook failed: {exc}")
 
