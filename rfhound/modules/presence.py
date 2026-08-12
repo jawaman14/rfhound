@@ -96,16 +96,16 @@ def check_presence(watchlist: list, observations: list, *, prev_present: set | N
         name = item.label or (obs.get("label") if obs else "") or item.id
         rssi = obs.get("rssi_dbm") if obs else None
         if item.on in ("appear",) and k in present and k not in prev:
-            findings.append(PresenceFinding(item.kind, item.id, name, "appeared",
-                            f"'{name}' ({item.id}) appeared"
-                            + (f" at {rssi:.0f} dBm" if rssi is not None else ""), rssi))
+            detail = f"'{name}' ({item.id}) appeared"
+            detail += f" at {rssi:.0f} dBm" if rssi is not None else ""
+            findings.append(PresenceFinding(item.kind, item.id, name, "appeared", detail, rssi))
         elif item.on == "near" and k in present and k not in prev:
-            findings.append(PresenceFinding(item.kind, item.id, name, "near",
-                            f"'{name}' ({item.id}) is near ({rssi:.0f} dBm ≥ "
-                            f"{item.rssi_threshold:.0f})", rssi))
+            detail = (f"'{name}' ({item.id}) is near ({rssi:.0f} dBm ≥ "
+                      f"{item.rssi_threshold:.0f})")
+            findings.append(PresenceFinding(item.kind, item.id, name, "near", detail, rssi))
         elif item.on == "disappear" and k in prev and k not in present:
-            findings.append(PresenceFinding(item.kind, item.id, name, "disappeared",
-                            f"'{name}' ({item.id}) disappeared", None))
+            detail = f"'{name}' ({item.id}) disappeared"
+            findings.append(PresenceFinding(item.kind, item.id, name, "disappeared", detail, None))
     return findings, present
 
 
