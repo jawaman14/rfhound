@@ -343,6 +343,18 @@ def test_presence_endpoint_simulated(base_url):
     assert code == 200 and "watchlist" in data
 
 
+def test_contacts_endpoint_simulated(base_url):
+    code, data = get(base_url + "/api/contacts?simulate=1")
+    assert code == 200 and data["simulated"] is True
+    kinds = {c["kind"] for c in data["contacts"]}
+    assert "aircraft" in kinds and "vessel" in kinds
+    c0 = data["contacts"][0]
+    assert {"lat", "lon", "rssi_dbm"} <= set(c0)
+    # Sorted strongest-first.
+    rssis = [c["rssi_dbm"] for c in data["contacts"]]
+    assert rssis == sorted(rssis, reverse=True)
+
+
 def test_watch_add_and_remove(cap_url):
     code, data = _post(cap_url + "/api/watch/add",
                        {"kind": "ble", "id": "AirTag", "on": "near", "rssi_threshold": -70})

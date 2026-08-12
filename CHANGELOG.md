@@ -49,6 +49,11 @@ All notable changes to RFHound. Versioning is [SemVer](https://semver.org/).
   `presence` automation is appended to a JSONL timeline; `watch history` shows
   the recent events (`--top N`, `--json`, `--clear`) so you get an auditable
   record of when a watched identifier came and went.
+- **Contacts map (ADS-B / AIS RSSI)** — decoded aircraft (ICAO) and vessels
+  (MMSI) are folded into positioned contacts with RSSI (`contacts_from_messages`)
+  and plotted on a self-contained lat/lon map on the dashboard, with marker
+  colour and size encoding signal strength. New endpoint `/api/contacts`.
+  Receive-only: it plots what the receiver heard.
 
 ## [1.3.0] — 2026-08-08
 

@@ -248,6 +248,19 @@ def presence_dict(cfg: Config, *, simulate: bool) -> dict:
     return {"watchlist": out}
 
 
+def contacts_dict(*, simulate: bool) -> dict:
+    """Positioned ADS-B aircraft / AIS vessel contacts (with RSSI) for the map."""
+    from ..modules import intel
+    if simulate:
+        contacts = intel.simulate_contacts()
+    else:
+        contacts = intel.contacts_from_messages()   # empty without a live decoder feed
+    return {"simulated": simulate,
+            "contacts": [{"kind": c.kind, "id": c.id, "label": c.label,
+                          "lat": c.lat, "lon": c.lon, "rssi_dbm": c.rssi_dbm,
+                          "detail": c.detail} for c in contacts]}
+
+
 def add_watch(cfg: Config, body: dict) -> dict:
     ident = str(body.get("id", "")).strip()
     if not ident:
@@ -516,6 +529,8 @@ def _make_handler(state: AppState):
                         simulate=sim))
                 if path == "/api/presence":
                     return self._send_json(presence_dict(cfg, simulate=sim))
+                if path == "/api/contacts":
+                    return self._send_json(contacts_dict(simulate=sim))
                 if path == "/api/sightings":
                     from ..modules import sightings as sightings_mod
                     store = sightings_mod.SightingsStore()

@@ -174,6 +174,7 @@
       <a href="#ble">🔵 Bluetooth</a>
       <a href="#foxhunt">🎯 Foxhunt</a>
       <a href="#presence">🚨 Presence</a>
+      <a href="#contacts">🛰️ Contacts map</a>
       <a href="#bands">📚 Knowledge base</a>
       <a href="#system">⚙️ System</a>
     </nav>
@@ -357,6 +358,15 @@
           <button class="mini" id="watchAddBtn">Watch</button>
         </div>
         <div class="muted" id="presMsg" style="margin-top:6px"></div>
+      </div>
+
+      <!-- Contacts map (ADS-B aircraft / AIS vessels with RSSI) -->
+      <div class="card section" id="contacts">
+        <h2>Contacts map — ADS-B / AIS <span class="exp"><button id="ctcRefresh">⟳</button></span></h2>
+        <p class="muted" style="margin:0 0 8px">Decoded aircraft (✈) and vessels (⚓) plotted by position; marker colour/size encodes RSSI. Receive-only.</p>
+        <canvas id="contactsMap" height="300" style="width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:10px"></canvas>
+        <div class="scroll" style="margin-top:8px"><table id="ctcTbl"><thead><tr><th>Type</th><th>ID</th><th>Label</th><th>Lat</th><th>Lon</th><th>dBm</th><th>Info</th></tr></thead><tbody></tbody></table></div>
+        <div class="muted" id="ctcMsg" style="margin-top:6px"></div>
       </div>
 
       <!-- Bookmarks -->
@@ -692,6 +702,39 @@ async function addWatch(){ const id=$('#watchId').value.trim();
   catch(e){ presMsg('Error: '+e.message,true); } }
 async function removeWatch(id){ try{ await post('/api/watch/remove',{id}); loadPresence(); presMsg('Removed “'+id+'”.'); }catch(e){presMsg('Error: '+e.message,true);} }
 
+// ---- contacts map (ADS-B / AIS with RSSI) ----
+function rssiColor(dbm){ // -50 (strong) => green, -100 (weak) => red
+  const t=Math.max(0,Math.min(1,(dbm+100)/50)); const r=Math.round(230*(1-t)), g=Math.round(200*t);
+  return `rgb(${r},${g},70)`; }
+function drawContactsMap(contacts){
+  const cv=$('#contactsMap'), g=cv.getContext('2d');
+  const cssW=cv.clientWidth||600; cv.width=cssW; const W=cv.width, H=cv.height;
+  g.clearRect(0,0,W,H);
+  const grid=getComputedStyle(document.body).getPropertyValue('--border')||'#1f2b3d';
+  g.strokeStyle=grid; g.lineWidth=1;
+  for(let i=1;i<6;i++){ const x=i/6*W,y=i/6*H; g.beginPath();g.moveTo(x,0);g.lineTo(x,H);g.moveTo(0,y);g.lineTo(W,y);g.stroke(); }
+  if(!contacts.length){ g.fillStyle='#6b7a90'; g.font='13px system-ui'; g.textAlign='center';
+    g.fillText('No contacts — enable Simulate or feed a decoder.',W/2,H/2); return; }
+  let laMin=1e9,laMax=-1e9,loMin=1e9,loMax=-1e9;
+  contacts.forEach(c=>{laMin=Math.min(laMin,c.lat);laMax=Math.max(laMax,c.lat);loMin=Math.min(loMin,c.lon);loMax=Math.max(loMax,c.lon);});
+  const padLa=(laMax-laMin)*0.15||0.05, padLo=(loMax-loMin)*0.15||0.05;
+  laMin-=padLa;laMax+=padLa;loMin-=padLo;loMax+=padLo;
+  const px=c=>({x:24+(c.lon-loMin)/(loMax-loMin)*(W-48), y:H-24-(c.lat-laMin)/(laMax-laMin)*(H-48)});
+  g.textAlign='left';
+  contacts.forEach(c=>{ const p=px(c), col=rssiColor(c.rssi_dbm), sz=6+(Math.max(-100,c.rssi_dbm)+100)/50*7;
+    g.fillStyle=col; g.beginPath(); g.arc(p.x,p.y,sz,0,7); g.fill();
+    g.fillStyle=getComputedStyle(document.body).getPropertyValue('--text')||'#dfe8f4'; g.font='12px system-ui';
+    g.fillText((c.kind==='aircraft'?'✈ ':'⚓ ')+(c.label||c.id)+' '+c.rssi_dbm.toFixed(0)+'dBm',p.x+sz+3,p.y+4); });
+}
+let lastContacts=[];
+async function loadContacts(){ try{
+  const d=await api(`/api/contacts?simulate=${sim()}`), tb=$('#ctcTbl tbody'); tb.innerHTML='';
+  lastContacts=d.contacts; drawContactsMap(d.contacts);
+  if(!d.contacts.length){ tb.innerHTML='<tr><td colspan=7 class=muted>No contacts.</td></tr>'; return; }
+  d.contacts.forEach(c=>tb.insertAdjacentHTML('beforeend',
+    `<tr><td>${c.kind==='aircraft'?'✈ air':'⚓ sea'}</td><td>${esc(c.id)}</td><td class=muted>${esc(c.label||'—')}</td><td>${c.lat.toFixed(3)}</td><td>${c.lon.toFixed(3)}</td><td>${c.rssi_dbm.toFixed(0)}</td><td class=muted>${esc(c.detail||'—')}</td></tr>`));
+}catch(e){console.error(e);} }
+
 // ---- export ----
 let lastSweep=null,lastRecon=null;
 function download(name,text,mime){const b=new Blob([text],{type:mime}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);}
@@ -770,16 +813,17 @@ $('#capBtn').onclick=doCapture;$('#recRefresh').onclick=loadRecordings;
 $('#eobRefresh').onclick=loadEmitters;$('#sightRefresh').onclick=loadSightings;$('#expEobCsv').onclick=exportEob;
 $('#wifiRefresh').onclick=loadWifi;$('#bleRefresh').onclick=loadBle;$('#huntBtn').onclick=toggleHunt;
 $('#presRefresh').onclick=loadPresence;$('#watchAddBtn').onclick=addWatch;
+$('#ctcRefresh').onclick=loadContacts;
 $('#expPeaksCsv').onclick=()=>exportPeaks('csv');$('#expPeaksJson').onclick=()=>exportPeaks('json');
 $('#expReconCsv').onclick=()=>exportRecon('csv');$('#expReconJson').onclick=()=>exportRecon('json');
 $('#expBandsCsv').onclick=()=>exportBands('csv');$('#expBandsJson').onclick=()=>exportBands('json');
 $('#live').onchange=e=>setLive(e.target.checked);
 let autoTimer=null;$('#autoSweep').onchange=e=>{if(e.target.checked)autoTimer=setInterval(doSweep,1500);else clearInterval(autoTimer);};
-window.addEventListener('resize',()=>{drawWaterfall();if(lastSpec)drawSpectrum(lastSpec);});
+window.addEventListener('resize',()=>{drawWaterfall();if(lastSpec)drawSpectrum(lastSpec);if(lastContacts.length)drawContactsMap(lastContacts);});
 initTheme();initWaterfallCtl();initRx();
 loadStatus().then(loadBands).then(loadBookmarks).then(doSweep).then(doRecon)
   .then(loadRecordings).then(loadEmitters).then(loadSightings)
-  .then(loadWifi).then(loadBle).then(loadPresence).then(refreshKpis).catch(e=>console.error(e));
+  .then(loadWifi).then(loadBle).then(loadPresence).then(loadContacts).then(refreshKpis).catch(e=>console.error(e));
 </script>
 </body>
 </html>

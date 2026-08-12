@@ -55,3 +55,28 @@ def test_drone_scan_simulated_finds_activity():
 
 def test_haversine_zero():
     assert intel._haversine_km(0, 0, 0, 0) == 0.0
+
+
+def test_simulate_contacts_has_aircraft_and_vessels():
+    contacts = intel.simulate_contacts()
+    kinds = {c.kind for c in contacts}
+    assert kinds == {"aircraft", "vessel"}
+    assert all(c.lat is not None and c.lon is not None for c in contacts)
+    # Sorted strongest RSSI first.
+    rssis = [c.rssi_dbm for c in contacts]
+    assert rssis == sorted(rssis, reverse=True)
+
+
+def test_contacts_from_messages_keeps_latest_fix_and_defaults_rssi():
+    adsb = [
+        {"icao": "aa", "t": 0, "lat": 1.0, "lon": 1.0, "alt": 30000},
+        {"icao": "aa", "t": 5, "lat": 2.0, "lon": 2.0, "alt": 31000, "rssi": -55.0},
+        {"icao": "bb", "t": 0, "lat": 9.0},   # no lon => dropped
+    ]
+    ais = [{"mmsi": "m1", "t": 0, "lat": 3.0, "lon": 3.0, "sog": 8}]
+    contacts = intel.contacts_from_messages(adsb=adsb, ais=ais)
+    ids = {c.id: c for c in contacts}
+    assert set(ids) == {"aa", "m1"}
+    assert ids["aa"].lat == 2.0 and ids["aa"].rssi_dbm == -55.0   # latest kept
+    assert ids["m1"].rssi_dbm == -100.0                          # default when absent
+    assert "kt" in ids["m1"].detail

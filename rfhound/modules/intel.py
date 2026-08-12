@@ -263,6 +263,74 @@ def simulate_ais_messages() -> list[dict]:
 
 
 # --------------------------------------------------------------------------- #
+# Positioned contacts — decoded ADS-B aircraft / AIS vessels with RSSI, for the
+# situational-awareness map. Receive-only: we plot what the receiver heard.
+# --------------------------------------------------------------------------- #
+@dataclass
+class Contact:
+    kind: str          # "aircraft" | "vessel"
+    id: str            # ICAO (aircraft) or MMSI (vessel)
+    label: str         # callsign / ship name, if known
+    lat: float
+    lon: float
+    rssi_dbm: float
+    detail: str = ""   # e.g. altitude / speed summary
+
+
+def contacts_from_messages(*, adsb=None, ais=None) -> list:
+    """Fold decoded ADS-B/AIS message streams into positioned contacts.
+
+    Groups by ICAO/MMSI, keeps the most recent message that carries a fix, and
+    surfaces its RSSI (default -100 dBm when the decoder didn't report one).
+    """
+    contacts: dict = {}
+    for m in adsb or []:
+        if m.get("lat") is None or m.get("lon") is None:
+            continue
+        key = ("aircraft", str(m.get("icao", "")))
+        prev = contacts.get(key)
+        if prev is None or m.get("t", 0) >= prev.get("t", 0):
+            alt = m.get("alt")
+            contacts[key] = {
+                "t": m.get("t", 0), "lat": m["lat"], "lon": m["lon"],
+                "rssi": m.get("rssi", -100.0), "label": m.get("callsign", ""),
+                "detail": f"{alt:.0f} ft" if alt is not None else ""}
+    for m in ais or []:
+        if m.get("lat") is None or m.get("lon") is None:
+            continue
+        key = ("vessel", str(m.get("mmsi", "")))
+        prev = contacts.get(key)
+        if prev is None or m.get("t", 0) >= prev.get("t", 0):
+            sog = m.get("sog")
+            contacts[key] = {
+                "t": m.get("t", 0), "lat": m["lat"], "lon": m["lon"],
+                "rssi": m.get("rssi", -100.0), "label": m.get("name", ""),
+                "detail": f"{sog:.0f} kt" if sog is not None else ""}
+    out = []
+    for (kind, cid), v in contacts.items():
+        out.append(Contact(kind, cid, v["label"], v["lat"], v["lon"],
+                           float(v["rssi"]), v["detail"]))
+    return sorted(out, key=lambda c: c.rssi_dbm, reverse=True)
+
+
+def simulate_contacts() -> list:
+    """Synthetic aircraft + vessel contacts (with RSSI) for the map."""
+    adsb = [
+        {"icao": "abc123", "t": 2, "lat": 51.48, "lon": -0.12, "alt": 35000,
+         "callsign": "BAW117", "rssi": -62.0},
+        {"icao": "4ca7b1", "t": 1, "lat": 51.62, "lon": -0.35, "alt": 12000,
+         "callsign": "RYR84J", "rssi": -78.0},
+    ]
+    ais = [
+        {"mmsi": "235094810", "t": 5, "lat": 50.92, "lon": -1.40, "sog": 11,
+         "name": "RED FALCON", "rssi": -71.0},
+        {"mmsi": "232003812", "t": 3, "lat": 50.80, "lon": -1.10, "sog": 6,
+         "name": "PILOT BOAT", "rssi": -85.0},
+    ]
+    return contacts_from_messages(adsb=adsb, ais=ais)
+
+
+# --------------------------------------------------------------------------- #
 # Counter-UAS: drone-band activity scan (detection only)
 # --------------------------------------------------------------------------- #
 @dataclass
